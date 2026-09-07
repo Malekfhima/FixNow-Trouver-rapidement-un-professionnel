@@ -1,0 +1,168 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ──────────────────────────────────────────────
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isClient() {
+      return isAuth() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'client';
+    }
+
+    function isPro() {
+      return isAuth() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'pro';
+    }
+
+    function isAdmin() {
+      return isAuth() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+
+    // ── Users collection ──────────────────────────────────────────────
+    match /users/{userId} {
+      // Anyone authenticated can read a user profile (needed for chat, reviews)
+      allow read: if isAuth();
+
+      // Users can create their own profile
+      allow create: if isOwner(userId);
+
+      // Users can update their own profile
+      allow update: if isOwner(userId);
+
+      // Only admins can delete users
+      allow delete: if isAdmin();
+    }
+
+    // ── Professionals collection ──────────────────────────────────────
+    match /professionals/{proId} {
+      // Anyone authenticated can read approved professionals
+      // Pros can read their own profile regardless of status
+      allow read: if isAuth() && (
+        resource.data.status == 'approved' ||
+        isOwner(proId) ||
+        isAdmin()
+      );
+
+      // Pros can create their own professional profile
+      allow create: if isOwner(proId) && isPro();
+
+      // Pros can update their own profile (except status)
+      allow update: if isOwner(proId) && isPro() &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']);
+
+      // Only admins can change professional status (approve/reject)
+      allow update: if isAdmin();
+
+      // Only admins can delete professional profiles
+      allow delete: if isAdmin();
+    }
+
+    // ── Service Requests ──────────────────────────────────────────────
+    match /serviceRequests/{requestId} {
+      // Client can read their own requests
+      // Pro can read requests assigned to them
+      // Admin can read all
+      allow read: if isAuth() && (
+        resource.data.clientId == request.auth.uid ||
+        resource.data.proId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Client can create a new request
+      allow create: if isClient() &&
+        request.resource.data.clientId == request.auth.uid;
+
+      // Client can update their own request (cancel only)
+      // Pro can update requests assigned to them (accept, decline, start, complete)
+      // Admin can update any request
+      allow update: if isAuth() && (
+        (resource.data.clientId == request.auth.uid &&
+         request.resource.data.status == 'cancelled') ||
+        (resource.data.proId == request.auth.uid) ||
+        isAdmin()
+      );
+
+      // Only admins can delete requests
+      allow delete: if isAdmin();
+    }
+
+    // ── Chats ─────────────────────────────────────────────────────────
+    match /chats/{chatId} {
+      allow read: if isAuth() && (
+        resource.data.clientId == request.auth.uid ||
+        resource.data.proId == request.auth.uid
+      );
+
+      allow create: if isAuth();
+      allow update: if isAuth();
+
+      match /messages/{messageId} {
+        // Only chat participants can read messages
+        allow read: if isAuth() && (
+          get(/databases/$(database)/documents/chats/$(chatId)).data.clientId == request.auth.uid ||
+          get(/databases/$(database)/documents/chats/$(chatId)).data.proId == request.auth.uid
+        );
+
+        // Only chat participants can send messages
+        allow create: if isAuth() && (
+          get(/databases/$(database)/documents/chats/$(chatId)).data.clientId == request.auth.uid ||
+          get(/databases/$(database)/documents/chats/$(chatId)).data.proId == request.auth.uid
+        ) && request.resource.data.senderId == request.auth.uid;
+
+        // Participants can update read status
+        allow update: if isAuth() && (
+          get(/databases/$(database)/documents/chats/$(chatId)).data.clientId == request.auth.uid ||
+          get(/databases/$(database)/documents/chats/$(chatId)).data.proId == request.auth.uid
+        );
+      }
+    }
+
+    // ── Reviews ───────────────────────────────────────────────────────
+    match /reviews/{reviewId} {
+      // Anyone authenticated can read reviews
+      allow read: if isAuth();
+
+      // Client who completed the request can write a review
+      allow create: if isClient() &&
+        request.resource.data.clientId == request.auth.uid;
+
+      // No updates or deletions allowed for reviews (immutable)
+      allow update, delete: if false;
+    }
+
+    // ── Categories (admin only) ───────────────────────────────────────
+    match /categories/{categoryId} {
+      // Anyone authenticated can read categories
+      allow read: if isAuth();
+
+      // Only admins can manage categories
+      allow write: if isAdmin();
+    }
+
+    // ── Reports ───────────────────────────────────────────────────────
+    match /reports/{reportId} {
+      // Reporter can read their own report, admins can read all
+      allow read: if isAuth() && (
+        resource.data.reporterId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Any authenticated user can create a report
+      allow create: if isAuth() && request.resource.data.reporterId == request.auth.uid;
+
+      // Only admins can update reports (investigate, resolve)
+      allow update: if isAdmin();
+
+      // Only admins can delete reports
+      allow delete: if isAdmin();
+    }
+  }
+}
