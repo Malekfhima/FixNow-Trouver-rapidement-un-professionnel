@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:fixnow/core/config/app_runtime.dart';
+import 'package:fixnow/features/home/home_controller.dart';
+import 'package:fixnow/models/user_model.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 import 'package:fixnow/features/chat/chat_controller.dart';
 import 'package:fixnow/features/auth/login_screen.dart';
 import 'package:fixnow/features/auth/register_screen.dart';
+import 'package:fixnow/features/auth/forgot_password_screen.dart';
 import 'package:fixnow/features/auth/phone_auth_screen.dart';
 import 'package:fixnow/features/onboarding/onboarding_screen.dart';
 import 'package:fixnow/features/home/home_shell_screen.dart';
@@ -24,6 +28,7 @@ class RoutePaths {
   static const onboarding = '/onboarding';
   static const login = '/login';
   static const register = '/register';
+  static const forgotPassword = '/forgot-password';
   static const phoneAuth = '/phone-auth';
   static const home = '/';
   static const search = '/search';
@@ -37,31 +42,57 @@ class RoutePaths {
   static const bookingNew = '/booking/new';
 }
 
-/// App router provider — uses GoRouter with auth redirect.
+/// Routes reserved to professional accounts.
+const proOnlyRoutes = ['/pro-dashboard'];
+
+/// Routes reserved to admin accounts.
+const adminOnlyRoutes = ['/admin'];
+
+/// App router provider — uses GoRouter with role-based auth redirect.
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
+  final profileAsync = ref.watch(userProfileProvider);
+
+  // Resolve the signed-in user's role (null when logged out).
+  final UserRole? role = profileAsync.valueOrNull?.role;
+  final isLoggedIn = authState.valueOrNull != null;
+
+  // While the Firestore profile is loading for a signed-in user, render the
+  // current route without redirecting (avoids flicker to /login).
+  final profileLoading = isLoggedIn && profileAsync.isLoading;
 
   return GoRouter(
     initialLocation: RoutePaths.home,
     debugLogDiagnostics: true,
     redirect: (context, state) {
-      final isLoggedIn = authState.valueOrNull != null;
-      final isOnboarding = state.matchedLocation == RoutePaths.onboarding;
+      final location = state.matchedLocation;
+      final isOnboarding = location == RoutePaths.onboarding;
       final isAuthRoute =
-          state.matchedLocation == RoutePaths.login ||
-          state.matchedLocation == RoutePaths.register ||
-          state.matchedLocation == RoutePaths.phoneAuth;
+          location == RoutePaths.login ||
+          location == RoutePaths.register ||
+          location == RoutePaths.forgotPassword ||
+          location == RoutePaths.phoneAuth;
 
-      // If not logged in and not on an auth page, send to login
-      // (skip redirect when Firebase is not configured)
-      if (!isLoggedIn && !isOnboarding && !isAuthRoute) {
-        return null; // Show the page directly for now
+      // Firebase not configured: leave everything accessible (dev mode).
+      if (!firebaseInitialized) return null;
+
+      // Not logged in: only auth pages and onboarding are reachable.
+      if (!isLoggedIn) {
+        if (!isAuthRoute && !isOnboarding) {
+          return RoutePaths.login;
+        }
+        return null;
       }
 
-      // If logged in and on login/register, send to home
-      if (isLoggedIn && isAuthRoute) {
-        return RoutePaths.home;
-      }
+      // Logged in: keep auth pages out of the way until the profile is known.
+      if (profileLoading) return null;
+      if (isAuthRoute) return RoutePaths.home;
+
+      // Role-based guards (rules Firestore remain the real enforcement).
+      final isProRoute = proOnlyRoutes.any((p) => location.startsWith(p));
+      final isAdminRoute = adminOnlyRoutes.any((p) => location.startsWith(p));
+      if (isProRoute && role != UserRole.pro) return RoutePaths.home;
+      if (isAdminRoute && role != UserRole.admin) return RoutePaths.home;
 
       return null;
     },
@@ -77,6 +108,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.register,
         builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: RoutePaths.forgotPassword,
+        builder: (context, state) => const ForgotPasswordScreen(),
       ),
       GoRoute(
         path: RoutePaths.phoneAuth,
