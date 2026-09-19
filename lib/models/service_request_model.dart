@@ -1,6 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum ServiceRequestStatus { pending, accepted, inProgress, completed, cancelled }
+enum ServiceRequestStatus {
+  pending,
+  accepted,
+  declined,
+  quoted,
+  inProgress,
+  completed,
+  cancelled,
+}
 
 class ServiceRequest {
   final String id;
@@ -11,6 +19,8 @@ class ServiceRequest {
   final List<String> photos;
   final ServiceRequestStatus status;
   final double? price;
+  final double? quotePrice;
+  final String? quoteNote;
   final String address;
   final DateTime? scheduledDate;
   final DateTime createdAt;
@@ -25,6 +35,8 @@ class ServiceRequest {
     this.photos = const [],
     this.status = ServiceRequestStatus.pending,
     this.price,
+    this.quotePrice,
+    this.quoteNote,
     required this.address,
     this.scheduledDate,
     required this.createdAt,
@@ -45,6 +57,8 @@ class ServiceRequest {
         orElse: () => ServiceRequestStatus.pending,
       ),
       price: data['price']?.toDouble(),
+      quotePrice: data['quotePrice']?.toDouble(),
+      quoteNote: data['quoteNote'],
       address: data['address'] ?? '',
       scheduledDate: (data['scheduledDate'] as Timestamp?)?.toDate(),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -61,6 +75,8 @@ class ServiceRequest {
       'photos': photos,
       'status': status.name,
       'price': price,
+      'quotePrice': quotePrice,
+      'quoteNote': quoteNote,
       'address': address,
       'scheduledDate':
           scheduledDate != null ? Timestamp.fromDate(scheduledDate!) : null,
@@ -75,6 +91,8 @@ class ServiceRequest {
     List<String>? photos,
     ServiceRequestStatus? status,
     double? price,
+    double? quotePrice,
+    String? quoteNote,
     String? address,
     DateTime? scheduledDate,
   }) {
@@ -87,6 +105,8 @@ class ServiceRequest {
       photos: photos ?? this.photos,
       status: status ?? this.status,
       price: price ?? this.price,
+      quotePrice: quotePrice ?? this.quotePrice,
+      quoteNote: quoteNote ?? this.quoteNote,
       address: address ?? this.address,
       scheduledDate: scheduledDate ?? this.scheduledDate,
       createdAt: createdAt,

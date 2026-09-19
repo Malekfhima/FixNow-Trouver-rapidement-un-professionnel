@@ -117,6 +117,14 @@ class FirestoreService {
     });
   }
 
+  /// Partial update of a service request (status transitions, quote…).
+  Future<void> updateServiceRequest(String requestId, Map<String, dynamic> data) async {
+    await _db.collection('serviceRequests').doc(requestId).update({
+      ...data,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   // ── Categories ───────────────────────────────────────────────────
 
   Future<List<ServiceCategory>> getCategories() async {

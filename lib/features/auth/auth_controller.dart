@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 import 'package:fixnow/services/firestore_service.dart';
 import 'package:fixnow/models/user_model.dart';
+import 'package:fixnow/models/professional_model.dart';
 
 /// State class for AuthController.
 class AuthState {
@@ -41,6 +42,7 @@ class AuthController extends StateNotifier<AuthState> {
     required String email,
     required String password,
     required String name,
+    UserRole role = UserRole.client,
   }) async {
     state = state.copyWith(isLoading: true);
     try {
@@ -50,12 +52,27 @@ class AuthController extends StateNotifier<AuthState> {
         // Create user profile in Firestore
         final newUser = AppUser(
           uid: credential.user!.uid,
-          role: UserRole.client,
+          role: role,
           name: name,
           email: email,
           createdAt: DateTime.now(),
         );
         await _firestoreService.createUser(newUser);
+
+        // Professionals also get a (pending) professional profile.
+        if (role == UserRole.pro) {
+          await _firestoreService.createProfessional(
+            Professional(
+              uid: credential.user!.uid,
+              name: name,
+              categories: const [],
+              bio: '',
+              hourlyRate: 0,
+              status: ProStatus.pending,
+              createdAt: DateTime.now(),
+            ),
+          );
+        }
         
         // Update Firebase display name
         await _authService.updateDisplayName(name);

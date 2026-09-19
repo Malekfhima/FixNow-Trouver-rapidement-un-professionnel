@@ -20,6 +20,8 @@ import 'package:fixnow/features/chat/chat_list_screen.dart';
 import 'package:fixnow/features/chat/chat_detail_screen.dart';
 import 'package:fixnow/features/client_dashboard/orders_screen.dart';
 import 'package:fixnow/features/profile/profile_screen.dart';
+import 'package:fixnow/features/pro_dashboard/pro_requests_screen.dart';
+import 'package:fixnow/features/pro_dashboard/pro_profile_edit_screen.dart';
 
 /// Route path constants.
 class RoutePaths {
@@ -43,7 +45,7 @@ class RoutePaths {
 }
 
 /// Routes reserved to professional accounts.
-const proOnlyRoutes = ['/pro-dashboard'];
+const proOnlyRoutes = ['/pro-dashboard', '/pro-profile-edit'];
 
 /// Routes reserved to admin accounts.
 const adminOnlyRoutes = ['/admin'];
@@ -165,6 +167,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final chatId = state.pathParameters['chatId']!;
           return ChatDetailScreen(chatId: chatId);
         },
+      ),
+
+      // Pro-only routes (guarded by role redirect + Firestore rules).
+      GoRoute(
+        path: '/pro-dashboard',
+        builder: (context, state) => const ProRequestsScreen(),
+      ),
+      GoRoute(
+        path: '/pro-profile-edit',
+        builder: (context, state) => const ProProfileEditScreen(),
       ),
 
       // New chat creation (client -> pro). We reuse the chat list and a helper create route.

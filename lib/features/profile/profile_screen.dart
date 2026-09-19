@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/features/auth/auth_controller.dart';
+import 'package:fixnow/features/home/home_controller.dart';
+import 'package:fixnow/models/user_model.dart';
 
 /// Client profile / settings screen.
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(userProfileProvider);
+
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Mon profil')),
@@ -19,21 +26,43 @@ class ProfileScreen extends StatelessWidget {
             CircleAvatar(
               radius: 40,
               backgroundColor: AppColors.primaryContainer,
-              child:
-                  const Icon(Icons.person, color: AppColors.primary, size: 40),
+              backgroundImage: user.valueOrNull?.avatarUrl != null
+                  ? NetworkImage(user.valueOrNull!.avatarUrl!)
+                  : null,
+              child: user.valueOrNull?.avatarUrl == null
+                  ? const Icon(Icons.person, color: AppColors.primary, size: 40)
+                  : null,
             ),
             const SizedBox(height: AppSpacing.md),
-            Text('Jean Dupont', style: AppTextStyles.h3),
+            Text(user.valueOrNull?.name ?? 'Utilisateur', style: AppTextStyles.h3),
             const SizedBox(height: AppSpacing.xs),
-            Text('jean.dupont@email.com', style: AppTextStyles.bodySmall),
+            Text(user.valueOrNull?.email ?? '', style: AppTextStyles.bodySmall),
 
             const SizedBox(height: AppSpacing.xxl),
+
 
             _MenuItem(
               icon: Icons.person_outline,
               label: 'Modifier le profil',
-              onTap: () {},
+              onTap: () {
+                final role = user.valueOrNull?.role;
+                if (role == UserRole.pro) {
+                  context.push('/pro-profile-edit');
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('L\'édition du profil client arrive bientôt'),
+                    ),
+                  );
+                }
+              },
             ),
+            if (user.valueOrNull?.role == UserRole.pro)
+              _MenuItem(
+                icon: Icons.work_outline,
+                label: 'Mes demandes (pro)',
+                onTap: () => context.push('/pro-dashboard'),
+              ),
             _MenuItem(
               icon: Icons.location_on_outlined,
               label: 'Mes adresses',
@@ -55,13 +84,16 @@ class ProfileScreen extends StatelessWidget {
               onTap: () {},
             ),
 
-            const SizedBox(height: AppSpacing.xxl),
-
-            // Logout
+            const SizedBox(height: AppSpacing.xxl),            // Logout
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () => context.go('/login'),
+                onPressed: () async {
+                  await ref.read(authControllerProvider.notifier).signOut();
+                  if (context.mounted) {
+                    context.go('/login');
+                  }
+                },
                 icon: const Icon(Icons.logout, color: AppColors.error),
                 label: const Text(
                   'Se déconnecter',
@@ -75,8 +107,7 @@ class ProfileScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                 ),
               ),
-            ),
-          ],
+            ),          ],
         ),
       ),
     );
