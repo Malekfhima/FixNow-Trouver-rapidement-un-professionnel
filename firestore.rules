@@ -7,19 +7,25 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Cached user document of the caller (1 read per evaluation).
+    function caller() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function role() {
+      return caller().role;
+    }
+
     function isClient() {
-      return isAuth() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'client';
+      return isAuth() && role() == 'client';
     }
 
     function isPro() {
-      return isAuth() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'pro';
+      return isAuth() && role() == 'pro';
     }
 
     function isAdmin() {
-      return isAuth() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isAuth() && role() == 'admin';
     }
 
     function isOwner(userId) {
@@ -34,8 +40,11 @@ service cloud.firestore {
       // Users can create their own profile
       allow create: if isOwner(userId);
 
-      // Users can update their own profile
-      allow update: if isOwner(userId);
+      // Users can update their own profile — but never their own role.
+      // Only admins can change someone's role.
+      allow update: if isOwner(userId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])
+        || isAdmin();
 
       // Only admins can delete users
       allow delete: if isAdmin();
@@ -54,9 +63,9 @@ service cloud.firestore {
       // Pros can create their own professional profile
       allow create: if isOwner(proId) && isPro();
 
-      // Pros can update their own profile (except status)
+      // Pros can update their own profile (except status — admin validation only)
       allow update: if isOwner(proId) && isPro() &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']);
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'ratingAvg', 'ratingCount']);
 
       // Only admins can change professional status (approve/reject)
       allow update: if isAdmin();
@@ -96,13 +105,17 @@ service cloud.firestore {
 
     // ── Chats ─────────────────────────────────────────────────────────
     match /chats/{chatId} {
-      allow read: if isAuth() && (
+      // Only chat participants can read/update/delete a conversation
+      allow read, update, delete: if isAuth() && (
         resource.data.clientId == request.auth.uid ||
         resource.data.proId == request.auth.uid
       );
 
-      allow create: if isAuth();
-      allow update: if isAuth();
+      // Only participants can create a conversation, with themselves on one side
+      allow create: if isAuth() && (
+        request.resource.data.clientId == request.auth.uid ||
+        request.resource.data.proId == request.auth.uid
+      );
 
       match /messages/{messageId} {
         // Only chat participants can read messages
@@ -111,7 +124,7 @@ service cloud.firestore {
           get(/databases/$(database)/documents/chats/$(chatId)).data.proId == request.auth.uid
         );
 
-        // Only chat participants can send messages
+        // Only chat participants can send messages, and only as themselves
         allow create: if isAuth() && (
           get(/databases/$(database)/documents/chats/$(chatId)).data.clientId == request.auth.uid ||
           get(/databases/$(database)/documents/chats/$(chatId)).data.proId == request.auth.uid
@@ -130,9 +143,15 @@ service cloud.firestore {
       // Anyone authenticated can read reviews
       allow read: if isAuth();
 
-      // Client who completed the request can write a review
-      allow create: if isClient() &&
-        request.resource.data.clientId == request.auth.uid;
+      // One review per completed service request:
+      // - caller must be the client of the request
+      // - the request must be completed
+      // - no existing review for that request (uniqueness via unique requestId doc id)
+      allow create: if isClient()
+        && request.resource.data.clientId == request.auth.uid
+        && get(/databases/$(database)/documents/serviceRequests/$(request.resource.data.requestId)).data.status == 'completed'
+        && get(/databases/$(database)/documents/serviceRequests/$(request.resource.data.requestId)).data.clientId == request.auth.uid
+        && reviewId == request.resource.data.requestId;
 
       // No updates or deletions allowed for reviews (immutable)
       allow update, delete: if false;
