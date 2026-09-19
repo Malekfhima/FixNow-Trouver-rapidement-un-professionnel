@@ -22,6 +22,7 @@ import 'package:fixnow/features/client_dashboard/orders_screen.dart';
 import 'package:fixnow/features/profile/profile_screen.dart';
 import 'package:fixnow/features/pro_dashboard/pro_requests_screen.dart';
 import 'package:fixnow/features/pro_dashboard/pro_profile_edit_screen.dart';
+import 'package:fixnow/features/profile/debug_seed_screen.dart';
 
 /// Route path constants.
 class RoutePaths {
@@ -177,6 +178,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/pro-profile-edit',
         builder: (context, state) => const ProProfileEditScreen(),
+      ),
+
+      // Dev-only demo data seeder (debug builds).
+      GoRoute(
+        path: '/debug-seed',
+        builder: (context, state) => const DebugSeedScreen(),
       ),
 
       // New chat creation (client -> pro). We reuse the chat list and a helper create route.

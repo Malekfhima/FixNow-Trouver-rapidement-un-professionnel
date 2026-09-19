@@ -61,7 +61,9 @@ service cloud.firestore {
       );
 
       // Pros can create their own professional profile
-      allow create: if isOwner(proId) && isPro();
+      // Admins can create demo/seed profiles (doc id starts with 'demo-')
+      allow create: if (isOwner(proId) && isPro())
+        || (isAdmin() && proId.matches('demo-.*'));
 
       // Pros can update their own profile (except status — admin validation only)
       allow update: if isOwner(proId) && isPro() &&

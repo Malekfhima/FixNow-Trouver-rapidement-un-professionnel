@@ -144,6 +144,25 @@ describe('professionals : statut invariant', () => {
       setDoc(doc(db, 'professionals', 'p4'), { status: 'approved' }, { merge: true })
     );
   });
+
+  test("seed : un admin peut créer des pros de démo (ids demo-*), pas d'autres", async () => {
+    await seedUser('admin4', 'admin');
+    const db = authedDb('admin4', 'admin');
+    await assertSucceeds(
+      setDoc(doc(db, 'professionals', 'demo-pro-1'), {
+        name: '[DÉMO] Pro fictif',
+        categories: ['Plomberie'],
+        status: 'approved',
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'professionals', 'vrai-pro'), {
+        name: 'Pas une démo',
+        categories: ['Plomberie'],
+        status: 'approved',
+      })
+    );
+  });
 });
 
 describe('chats : réservés aux participants', () => {
