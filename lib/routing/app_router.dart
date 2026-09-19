@@ -1,6 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
+import 'package:fixnow/features/chat/chat_controller.dart';
 import 'package:fixnow/features/auth/login_screen.dart';
 import 'package:fixnow/features/auth/register_screen.dart';
 import 'package:fixnow/features/auth/phone_auth_screen.dart';
@@ -31,6 +33,8 @@ class RoutePaths {
   static const chatDetail = '/chat/:chatId';
   static const orders = '/orders';
   static const profile = '/profile';
+  static const newChat = '/chat/new';
+  static const bookingNew = '/booking/new';
 }
 
 /// App router provider — uses GoRouter with auth redirect.
@@ -127,6 +131,54 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return ChatDetailScreen(chatId: chatId);
         },
       ),
+
+      // New chat creation (client -> pro). We reuse the chat list and a helper create route.
+      GoRoute(
+        path: RoutePaths.newChat,
+        builder: (context, state) {
+          return const _NewChatScreen();
+        },
+      ),
     ],
   );
 });
+
+/// Simple screen that creates (or finds) a chat with a pro and redirects to it.
+class _NewChatScreen extends ConsumerStatefulWidget {
+  const _NewChatScreen();
+
+  @override
+  ConsumerState<_NewChatScreen> createState() => _NewChatScreenState();
+}
+
+class _NewChatScreenState extends ConsumerState<_NewChatScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _createChat();
+  }
+
+  Future<void> _createChat() async {
+    final proId = GoRouterState.of(context).uri.queryParameters['proId'];
+    if (proId == null) {
+      context.go('/chat');
+      return;
+    }
+
+    final chatId = await ensureChatBetween(proId: proId, ref: ref);
+    if (!mounted) return;
+    if (chatId != null) {
+      context.go('/chat/$chatId');
+    } else {
+      // If no user logged in, go back.
+      context.go('/login');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
+    );
+  }
+}

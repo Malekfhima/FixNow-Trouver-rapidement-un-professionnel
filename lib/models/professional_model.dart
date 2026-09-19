@@ -4,6 +4,9 @@ enum ProStatus { pending, approved, rejected }
 
 class Professional {
   final String uid;
+  final String name;
+  final String? avatarUrl;
+  final String city;
   final List<String> categories;
   final String bio;
   final double hourlyRate;
@@ -18,6 +21,9 @@ class Professional {
 
   const Professional({
     required this.uid,
+    this.name = '',
+    this.avatarUrl,
+    this.city = '',
     required this.categories,
     required this.bio,
     required this.hourlyRate,
@@ -35,6 +41,9 @@ class Professional {
     final data = doc.data() as Map<String, dynamic>;
     return Professional(
       uid: doc.id,
+      name: data['name'] ?? '',
+      avatarUrl: data['avatarUrl'],
+      city: data['city'] ?? '',
       categories: List<String>.from(data['categories'] ?? []),
       bio: data['bio'] ?? '',
       hourlyRate: (data['hourlyRate'] ?? 0).toDouble(),
@@ -54,6 +63,9 @@ class Professional {
 
   Map<String, dynamic> toFirestore() {
     return {
+      'name': name,
+      'avatarUrl': avatarUrl,
+      'city': city,
       'categories': categories,
       'bio': bio,
       'hourlyRate': hourlyRate,
@@ -69,6 +81,9 @@ class Professional {
   }
 
   Professional copyWith({
+    String? name,
+    String? avatarUrl,
+    String? city,
     List<String>? categories,
     String? bio,
     double? hourlyRate,
@@ -82,6 +97,9 @@ class Professional {
   }) {
     return Professional(
       uid: uid,
+      name: name ?? this.name,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      city: city ?? this.city,
       categories: categories ?? this.categories,
       bio: bio ?? this.bio,
       hourlyRate: hourlyRate ?? this.hourlyRate,

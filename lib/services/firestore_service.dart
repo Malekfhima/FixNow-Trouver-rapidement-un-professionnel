@@ -9,7 +9,9 @@ import 'package:fixnow/models/chat_model.dart';
 
 /// Central service for all Firestore read/write operations.
 class FirestoreService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // Lazy access so constructing the service never requires an initialized
+  // Firebase app (e.g. in widget tests or when Firebase is not configured).
+  FirebaseFirestore get _db => FirebaseFirestore.instance;
 
   // ── Users ────────────────────────────────────────────────────────
 
