@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fixnow/services/firestore_service.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 import 'package:fixnow/models/service_request_model.dart';
+import 'package:fixnow/features/notifications/notification_helpers.dart';
+import 'package:fixnow/models/notification_model.dart';
 
 /// State for the pro-side requests dashboard.
 class ProRequestsState {
@@ -95,12 +97,21 @@ class ProRequestsController extends StateNotifier<ProRequestsState> {
 
   /// Accepts a pending request.
   Future<String?> acceptRequest(String requestId) async {
-    return _update(requestId, {'status': ServiceRequestStatus.accepted.name});
+    final err = await _updateAndNotify(
+      requestId,
+      {'status': ServiceRequestStatus.accepted.name},
+      NotificationType.requestAccepted,
+    );
+    return err;
   }
 
   /// Declines a pending request.
   Future<String?> declineRequest(String requestId) async {
-    return _update(requestId, {'status': ServiceRequestStatus.declined.name});
+    return _updateAndNotify(
+      requestId,
+      {'status': ServiceRequestStatus.declined.name},
+      NotificationType.requestDeclined,
+    );
   }
 
   /// Sends a quote for a pending request.
@@ -109,11 +120,15 @@ class ProRequestsController extends StateNotifier<ProRequestsState> {
     required double price,
     required String note,
   }) async {
-    return _update(requestId, {
-      'status': ServiceRequestStatus.quoted.name,
-      'quotePrice': price,
-      'quoteNote': note,
-    });
+    return _updateAndNotify(
+      requestId,
+      {
+        'status': ServiceRequestStatus.quoted.name,
+        'quotePrice': price,
+        'quoteNote': note,
+      },
+      NotificationType.quoteReceived,
+    );
   }
 
   /// Marks a request as in progress.
@@ -123,7 +138,44 @@ class ProRequestsController extends StateNotifier<ProRequestsState> {
 
   /// Marks a request as completed.
   Future<String?> completeWork(String requestId) async {
-    return _update(requestId, {'status': ServiceRequestStatus.completed.name});
+    return _updateAndNotify(
+      requestId,
+      {'status': ServiceRequestStatus.completed.name},
+      NotificationType.requestCompleted,
+    );
+  }
+
+  /// Updates the request then notifies the client.
+  Future<String?> _updateAndNotify(
+    String requestId,
+    Map<String, dynamic> data,
+    NotificationType type,
+  ) async {
+    final error = await _update(requestId, data);
+    if (error != null) return error;
+
+    try {
+      final request = await _ref
+          .read(firestoreServiceProvider)
+          .getRequest(requestId);
+      if (request?.clientId != null) {
+        await pushNotification(
+          _ref,
+          userId: request!.clientId,
+          type: type,
+          relatedId: requestId,
+          title: NotificationCopy.titleFor(type),
+          body: NotificationCopy.bodyForRequest(
+            ServiceRequestStatus.values
+                .firstWhere((s) => s.name == data['status']),
+            'Le professionnel',
+          ),
+        );
+      }
+    } catch (_) {
+      // Notification is best-effort; the status update already succeeded.
+    }
+    return null;
   }
 
   Future<String?> _update(String requestId, Map<String, dynamic> data) async {

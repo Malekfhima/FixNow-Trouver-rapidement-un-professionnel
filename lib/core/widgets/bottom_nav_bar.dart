@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/features/notifications/notifications_controller.dart';
 
 /// Custom bottom navigation bar matching the FixNow design.
-class BottomNavBar extends StatelessWidget {
+class BottomNavBar extends ConsumerWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
@@ -13,7 +15,10 @@ class BottomNavBar extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Real unread notifications count (0 hides the badge).
+    final unread = ref.watch(unreadNotificationsCountProvider);
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.white,
@@ -51,7 +56,7 @@ class BottomNavBar extends StatelessWidget {
                 label: 'Commandes',
                 isActive: currentIndex == 2,
                 onTap: () => onTap(2),
-                badge: 3,
+                badge: unread > 0 ? (unread > 9 ? 9 : unread) : null,
               ),
               _NavItem(
                 icon: Icons.person_rounded,

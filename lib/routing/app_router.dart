@@ -20,6 +20,10 @@ import 'package:fixnow/features/chat/chat_list_screen.dart';
 import 'package:fixnow/features/chat/chat_detail_screen.dart';
 import 'package:fixnow/features/client_dashboard/orders_screen.dart';
 import 'package:fixnow/features/profile/profile_screen.dart';
+import 'package:fixnow/features/profile/profile_edit_screen.dart';
+import 'package:fixnow/features/review/review_screen.dart';
+import 'package:fixnow/features/notifications/notifications_screen.dart';
+import 'package:fixnow/features/admin/admin_screen.dart';
 import 'package:fixnow/features/pro_dashboard/pro_requests_screen.dart';
 import 'package:fixnow/features/pro_dashboard/pro_profile_edit_screen.dart';
 import 'package:fixnow/features/profile/debug_seed_screen.dart';
@@ -43,6 +47,10 @@ class RoutePaths {
   static const profile = '/profile';
   static const newChat = '/chat/new';
   static const bookingNew = '/booking/new';
+  static const notifications = '/notifications';
+  static const profileEdit = '/profile/edit';
+  static const review = '/review/:requestId';
+  static const admin = '/admin';
 }
 
 /// Routes reserved to professional accounts.
@@ -56,8 +64,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
   final profileAsync = ref.watch(userProfileProvider);
 
-  // Resolve the signed-in user's role (null when logged out).
-  final UserRole? role = profileAsync.valueOrNull?.role;
+  // Resolve the signed-in user's capabilities (null when logged out).
+  final user = profileAsync.valueOrNull;
+  final UserRole? role = user?.role;
+  final bool isPro = user?.isPro ?? false;
   final isLoggedIn = authState.valueOrNull != null;
 
   // While the Firestore profile is loading for a signed-in user, render the
@@ -94,8 +104,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Role-based guards (rules Firestore remain the real enforcement).
       final isProRoute = proOnlyRoutes.any((p) => location.startsWith(p));
       final isAdminRoute = adminOnlyRoutes.any((p) => location.startsWith(p));
-      if (isProRoute && role != UserRole.pro) return RoutePaths.home;
+      // A pro account keeps all client capabilities (dual role).
+      if (isProRoute && !isPro) return RoutePaths.home;
       if (isAdminRoute && role != UserRole.admin) return RoutePaths.home;
+      if (location.startsWith(RoutePaths.review.split(':').first) &&
+          !isLoggedIn) {
+        return RoutePaths.login;
+      }
 
       return null;
     },
@@ -168,6 +183,33 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final chatId = state.pathParameters['chatId']!;
           return ChatDetailScreen(chatId: chatId);
         },
+      ),
+
+      // Notifications (in-app)
+      GoRoute(
+        path: RoutePaths.notifications,
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+
+      // Client profile editing
+      GoRoute(
+        path: RoutePaths.profileEdit,
+        builder: (context, state) => const ProfileEditScreen(),
+      ),
+
+      // Review (rate a completed request)
+      GoRoute(
+        path: RoutePaths.review,
+        builder: (context, state) {
+          final requestId = state.pathParameters['requestId']!;
+          return ReviewScreen(requestId: requestId);
+        },
+      ),
+
+      // Admin dashboard
+      GoRoute(
+        path: RoutePaths.admin,
+        builder: (context, state) => const AdminScreen(),
       ),
 
       // Pro-only routes (guarded by role redirect + Firestore rules).

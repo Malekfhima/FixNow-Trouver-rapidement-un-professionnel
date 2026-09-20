@@ -1,35 +1,49 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/core/widgets/service_icon_card.dart';
 import 'package:fixnow/core/widgets/pro_card.dart';
+import 'package:fixnow/features/home/home_controller.dart';
+import 'package:fixnow/features/notifications/notifications_controller.dart';
+import 'package:shimmer/shimmer.dart';
 
 /// Client Home screen — reproduces the main layout from the mockups.
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
+  void _openBookingWithPro(BuildContext context, String proId) {
+    context.push('/booking/new?proId=$proId');
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final homeState = ref.watch(homeControllerProvider);
+    final userProfile = ref.watch(userProfileProvider);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: AppSpacing.lg),
-              _buildHeader(context),
-              const SizedBox(height: AppSpacing.xl),
-              _buildSearchBar(context),
-              const SizedBox(height: AppSpacing.xl),
-              _buildPromoBanner(context),
-              const SizedBox(height: AppSpacing.xxl),
-              _buildServicesGrid(context),
-              const SizedBox(height: AppSpacing.xxl),
-              _buildPopularSection(context),
-              const SizedBox(height: AppSpacing.xxxxxl),
-            ],
+        child: RefreshIndicator(
+          onRefresh: () => ref.read(homeControllerProvider.notifier).fetchData(),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: AppSpacing.lg),
+                _buildHeader(context, ref, userProfile.valueOrNull),
+                const SizedBox(height: AppSpacing.xl),
+                _buildSearchBar(context),
+                const SizedBox(height: AppSpacing.xl),
+                _buildPromoBanner(context),
+                const SizedBox(height: AppSpacing.xxl),
+                _buildServicesGrid(context),
+                const SizedBox(height: AppSpacing.xxl),
+                _buildPopularSection(context, homeState),
+                const SizedBox(height: AppSpacing.xxxxxl),
+              ],
+            ),
           ),
         ),
       ),
@@ -38,7 +52,8 @@ class HomeScreen extends StatelessWidget {
 
   // ── Header ─────────────────────────────────────────────────────────
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, WidgetRef ref, dynamic user) {
+    final unreadCount = ref.watch(unreadNotificationsCountProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       child: Row(
@@ -47,7 +62,11 @@ class HomeScreen extends StatelessWidget {
           CircleAvatar(
             radius: 24,
             backgroundColor: AppColors.primaryContainer,
-            child: const Icon(Icons.person, color: AppColors.primary, size: 28),
+            backgroundImage:
+                user?.avatarUrl != null ? NetworkImage(user.avatarUrl!) : null,
+            child: user?.avatarUrl == null
+                ? const Icon(Icons.person, color: AppColors.primary, size: 28)
+                : null,
           ),
           const SizedBox(width: AppSpacing.md),
 
@@ -61,8 +80,10 @@ class HomeScreen extends StatelessWidget {
                   style: AppTextStyles.bodySmall,
                 ),
                 Text(
-                  'Jean Dupont',
+                  user?.name ?? 'Utilisateur',
                   style: AppTextStyles.h2,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -70,9 +91,7 @@ class HomeScreen extends StatelessWidget {
 
           // Notification bell with badge
           GestureDetector(
-            onTap: () {
-              // TODO: Navigate to notifications
-            },
+            onTap: () => context.push('/notifications'),
             child: Stack(
               clipBehavior: Clip.none,
               children: [
@@ -89,29 +108,30 @@ class HomeScreen extends StatelessWidget {
                     size: 22,
                   ),
                 ),
-                // Badge
-                Positioned(
-                  right: -2,
-                  top: -2,
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: const BoxDecoration(
-                      color: AppColors.accent,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: Text(
-                        '3',
-                        style: TextStyle(
-                          color: AppColors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
+                // Badge — real unread notifications count
+                if (unreadCount > 0)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: const BoxDecoration(
+                        color: AppColors.accent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '$unreadCount',
+                          style: const TextStyle(
+                            color: AppColors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -252,7 +272,7 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(height: AppSpacing.lg),
                   ElevatedButton.icon(
                     onPressed: () {
-                      // TODO: Navigate to booking
+                      context.push('/search');
                     },
                     icon: const Icon(Icons.arrow_forward_rounded, size: 18),
                     label: const Text('Réserver maintenant'),
@@ -349,7 +369,7 @@ class HomeScreen extends StatelessWidget {
 
   // ── Popular Section ────────────────────────────────────────────────
 
-  Widget _buildPopularSection(BuildContext context) {
+  Widget _buildPopularSection(BuildContext context, HomeState state) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -373,40 +393,105 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
-        SizedBox(
-          height: 160,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-            itemCount: _mockPros.length,
-            separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.lg),
-            itemBuilder: (context, index) {
-              final pro = _mockPros[index];
-              return SizedBox(
-                width: MediaQuery.of(context).size.width * 0.82,
-                child: ProCard(
-                  name: pro.name,
-                  category: pro.category,
-                  categoryColor: pro.categoryColor,
-                  categoryBgColor: pro.categoryBgColor,
-                  rating: pro.rating,
-                  reviewCount: pro.reviewCount,
-                  price: pro.price,
-                  onViewProfile: () =>
-                      context.push('/pro/${pro.id}'),
-                  onBook: () => context.push('/booking/new'),
-                ),
-              );
-            },
+        if (state.isLoading)
+          _buildShimmerList()
+        else if (state.error != null)
+          Center(child: Text('Erreur: ${state.error}'))
+        else if (state.popularPros.isEmpty)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(AppSpacing.xl),
+              child: Text('Aucun professionnel trouvé'),
+            ),
+          )
+        else
+          SizedBox(
+            height: 160,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+              itemCount: state.popularPros.length,
+              separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.lg),
+              itemBuilder: (context, index) {
+                final pro = state.popularPros[index];
+                return SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.82,
+                  child: ProCard(
+                    name: pro.name,
+                    category: pro.categories.isNotEmpty ? pro.categories.first : 'Artisan',
+                    categoryColor: _categoryColor(pro.categories.firstOrNull),
+                    categoryBgColor: _categoryBgColor(pro.categories.firstOrNull),
+                    rating: pro.ratingAvg,
+                    reviewCount: pro.ratingCount,
+                    price: pro.hourlyRate,
+                    imageUrl: pro.avatarUrl,
+                    onViewProfile: () => context.push('/pro/${pro.uid}'),
+                    onBook: () => _openBookingWithPro(context, pro.uid),
+                  ),
+                );
+              },
+            ),
           ),
-        ),
       ],
     );
   }
-}
 
-// ── Local helpers ──────────────────────────────────────────────────────
+  Widget _buildShimmerList() {
+    return SizedBox(
+      height: 160,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+        itemCount: 3,
+        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.lg),
+        itemBuilder: (_, __) => Shimmer.fromColors(
+          baseColor: Colors.grey[300]!,
+          highlightColor: Colors.grey[100]!,
+          child: Container(
+            width: 300,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: AppRadius.lgAll,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Local helpers ──────────────────────────────────────────────────────
+
+  Color _categoryColor(String? category) {
+    final map = <String, Color>{
+      'Plombier': AppColors.plomberie,
+      'Électricien': AppColors.electricite,
+      'Menuisier': AppColors.menuiserie,
+      'Peintre': AppColors.peinture,
+      'Maçon': AppColors.maconnerie,
+      'Soudeur': AppColors.soudure,
+      'Couvreur': AppColors.couverture,
+      'Ménage': AppColors.menage,
+      'Artisan': AppColors.textSecondary,
+    };
+    return map[category] ?? AppColors.textSecondary;
+  }
+
+  Color _categoryBgColor(String? category) {
+    final map = <String, Color>{
+      'Plombier': AppColors.plomberieLight,
+      'Électricien': AppColors.electriciteLight,
+      'Menuisier': AppColors.menuiserieLight,
+      'Peintre': AppColors.peintureLight,
+      'Maçon': AppColors.maconnerieLight,
+      'Soudeur': AppColors.soudureLight,
+      'Couvreur': AppColors.couvertureLight,
+      'Ménage': AppColors.menageLight,
+      'Artisan': AppColors.soudureLight,
+    };
+    return map[category] ?? AppColors.soudureLight;
+  }
+}
 
 class _ServiceItem {
   final IconData icon;
@@ -415,58 +500,3 @@ class _ServiceItem {
   final Color bgColor;
   _ServiceItem(this.icon, this.label, this.color, this.bgColor);
 }
-
-class _MockPro {
-  final String id;
-  final String name;
-  final String category;
-  final Color categoryColor;
-  final Color categoryBgColor;
-  final double rating;
-  final int reviewCount;
-  final double price;
-
-  const _MockPro({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.categoryColor,
-    required this.categoryBgColor,
-    required this.rating,
-    required this.reviewCount,
-    required this.price,
-  });
-}
-
-const _mockPros = [
-  _MockPro(
-    id: '1',
-    name: 'Marc Lefebvre',
-    category: 'Plombier',
-    categoryColor: AppColors.plomberie,
-    categoryBgColor: AppColors.plomberieLight,
-    rating: 4.8,
-    reviewCount: 127,
-    price: 45,
-  ),
-  _MockPro(
-    id: '2',
-    name: 'Sophie Martin',
-    category: 'Électricien',
-    categoryColor: AppColors.electricite,
-    categoryBgColor: AppColors.electriciteLight,
-    rating: 4.9,
-    reviewCount: 89,
-    price: 52,
-  ),
-  _MockPro(
-    id: '3',
-    name: 'Ahmed Benali',
-    category: 'Menuisier',
-    categoryColor: AppColors.menuiserie,
-    categoryBgColor: AppColors.menuiserieLight,
-    rating: 4.7,
-    reviewCount: 64,
-    price: 0,
-  ),
-];

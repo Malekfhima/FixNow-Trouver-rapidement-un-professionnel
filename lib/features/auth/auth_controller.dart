@@ -42,25 +42,26 @@ class AuthController extends StateNotifier<AuthState> {
     required String email,
     required String password,
     required String name,
-    UserRole role = UserRole.client,
+    bool asPro = false,
   }) async {
     state = state.copyWith(isLoading: true);
     try {
       final credential = await _authService.signUpWithEmail(email: email, password: password);
       
       if (credential.user != null) {
-        // Create user profile in Firestore
+        // Everyone is a client; the pro flag adds professional capabilities.
         final newUser = AppUser(
           uid: credential.user!.uid,
-          role: role,
+          role: UserRole.client,
+          isPro: asPro,
           name: name,
           email: email,
           createdAt: DateTime.now(),
         );
         await _firestoreService.createUser(newUser);
 
-        // Professionals also get a (pending) professional profile.
-        if (role == UserRole.pro) {
+        // Pros get a (pending) professional profile.
+        if (asPro) {
           await _firestoreService.createProfessional(
             Professional(
               uid: credential.user!.uid,
@@ -78,6 +79,53 @@ class AuthController extends StateNotifier<AuthState> {
         await _authService.updateDisplayName(name);
       }
       
+      state = state.copyWith(isLoading: false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return false;
+    }
+  }
+
+  /// Upgrades the current client account with professional capabilities.
+  /// Creates the pending professional profile if needed.
+  Future<bool> becomePro() async {
+    final user = _authService.currentUser;
+    if (user == null) {
+      state = state.copyWith(error: 'Vous devez être connecté');
+      return false;
+    }
+
+    state = state.copyWith(isLoading: true);
+    try {
+      final profile = await _firestoreService.getUser(user.uid);
+      if (profile == null) {
+        state = state.copyWith(isLoading: false, error: 'Profil introuvable');
+        return false;
+      }
+      if (!profile.isPro) {
+        await _firestoreService.updateUser(user.uid, {
+          'isPro': true,
+          'role': UserRole.pro.name,
+        });
+      }
+
+      // Create the pending professional profile if it doesn't exist yet.
+      final existingPro = await _firestoreService.getProfessional(user.uid);
+      if (existingPro == null) {
+        await _firestoreService.createProfessional(
+          Professional(
+            uid: user.uid,
+            name: profile.name,
+            categories: const [],
+            bio: '',
+            hourlyRate: 0,
+            status: ProStatus.pending,
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
+
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {

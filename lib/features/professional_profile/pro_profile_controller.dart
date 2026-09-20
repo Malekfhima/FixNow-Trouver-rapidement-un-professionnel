@@ -66,3 +66,10 @@ final proProfileControllerProvider = StateNotifierProvider.family<ProProfileCont
   final firestoreService = ref.watch(firestoreServiceProvider);
   return ProProfileController(firestoreService, proId);
 });
+
+/// Lightweight lookup of a professional by id (e.g. to show the pro name
+/// on a service request card).
+final proByIdProvider =
+    FutureProvider.family<Professional?, String>((ref, proId) {
+  return ref.watch(firestoreServiceProvider).getProfessional(proId);
+});

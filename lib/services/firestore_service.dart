@@ -6,6 +6,7 @@ import 'package:fixnow/models/service_request_model.dart';
 import 'package:fixnow/models/category_model.dart';
 import 'package:fixnow/models/review_model.dart';
 import 'package:fixnow/models/chat_model.dart';
+import 'package:fixnow/models/notification_model.dart';
 
 /// Central service for all Firestore read/write operations.
 class FirestoreService {
@@ -37,6 +38,14 @@ class FirestoreService {
 
   Future<void> updateUser(String uid, Map<String, dynamic> data) async {
     await _userDoc(uid).update(data);
+  }
+
+  /// Creates the user profile if missing (phone auth / Google first login).
+  Future<void> ensureUser(AppUser user) async {
+    final doc = await _userDoc(user.uid).get();
+    if (!doc.exists) {
+      await _userDoc(user.uid).set(user.toFirestore());
+    }
   }
 
   // ── Professionals ────────────────────────────────────────────────
@@ -90,6 +99,13 @@ class FirestoreService {
     return ref.id;
   }
 
+  /// Fetches a single service request (null if missing).
+  Future<ServiceRequest?> getRequest(String requestId) async {
+    final doc = await _db.collection('serviceRequests').doc(requestId).get();
+    if (!doc.exists) return null;
+    return ServiceRequest.fromFirestore(doc);
+  }
+
   Stream<List<ServiceRequest>> clientRequestsStream(String clientId) {
     return _db
         .collection('serviceRequests')
@@ -139,6 +155,50 @@ class FirestoreService {
         snap.docs.map((doc) => ServiceCategory.fromFirestore(doc)).toList());
   }
 
+  // ── Notifications (in-app) ───────────────────────────────────────
+
+  Stream<List<NotificationItem>> notificationsStream(String userId) {
+    return _db
+        .collection('notifications')
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .limit(50)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => NotificationItem.fromFirestore(doc)).toList());
+  }
+
+  /// Number of unread notifications for the badge.
+  Stream<int> unreadNotificationsStream(String userId) {
+    return notificationsStream(userId)
+        .map((list) => list.where((n) => !n.read).length);
+  }
+
+  Future<void> createNotification(NotificationItem notification) async {
+    await _db.collection('notifications').doc().set(notification.toFirestore());
+  }
+
+  Future<void> markNotificationRead(String notificationId) async {
+    await _db.collection('notifications').doc(notificationId).update({'read': true});
+  }
+
+  Future<void> markAllNotificationsRead(String userId) async {
+    final snap = await _db
+        .collection('notifications')
+        .where('userId', isEqualTo: userId)
+        .where('read', isEqualTo: false)
+        .get();
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.update(doc.reference, {'read': true});
+    }
+    await batch.commit();
+  }
+
+  Future<void> deleteNotification(String notificationId) async {
+    await _db.collection('notifications').doc(notificationId).delete();
+  }
+
   // ── Reviews ──────────────────────────────────────────────────────
 
   Future<List<Review>> getProReviews(String proId) async {
@@ -150,8 +210,41 @@ class FirestoreService {
     return snapshot.docs.map((doc) => Review.fromFirestore(doc)).toList();
   }
 
+  /// Creates a review. The document id MUST be the requestId (uniqueness
+  /// enforced by the Firestore rules: one review per completed request).
   Future<void> createReview(Review review) async {
-    await _db.collection('reviews').add(review.toFirestore());
+    await _db
+        .collection('reviews')
+        .doc(review.requestId)
+        .set(review.toFirestore());
+  }
+
+  /// Whether a review already exists for a given service request.
+  Future<bool> hasReview(String requestId) async {
+    final doc = await _db.collection('reviews').doc(requestId).get();
+    return doc.exists;
+  }
+
+  // ── Pro rating aggregation ───────────────────────────────────────
+
+  /// Recomputes a pro's ratingAvg / ratingCount from all their reviews.
+  /// Called after a new review; also refreshes profile completeness.
+  Future<void> recomputeProRating(String proId) async {
+    final snapshot = await _db
+        .collection('reviews')
+        .where('proId', isEqualTo: proId)
+        .get();
+    final count = snapshot.docs.length;
+    final avg = count == 0
+        ? 0.0
+        : snapshot.docs
+                .map((doc) => (doc.data()['rating'] ?? 0) as num)
+                .reduce((a, b) => a + b) /
+            count;
+    await _proDoc(proId).update({
+      'ratingAvg': avg,
+      'ratingCount': count,
+    });
   }
 
   // ── Chats ────────────────────────────────────────────────────────

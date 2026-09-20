@@ -46,23 +46,47 @@ class ProfileScreen extends ConsumerWidget {
               icon: Icons.person_outline,
               label: 'Modifier le profil',
               onTap: () {
-                final role = user.valueOrNull?.role;
-                if (role == UserRole.pro) {
+                if (user.valueOrNull?.isPro ?? false) {
                   context.push('/pro-profile-edit');
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('L\'édition du profil client arrive bientôt'),
-                    ),
-                  );
+                  context.push('/profile/edit');
                 }
               },
             ),
-            if (user.valueOrNull?.role == UserRole.pro)
+            if (user.valueOrNull?.isPro ?? false)
               _MenuItem(
                 icon: Icons.work_outline,
                 label: 'Mes demandes (pro)',
                 onTap: () => context.push('/pro-dashboard'),
+              )
+            else
+              _MenuItem(
+                icon: Icons.add_business_outlined,
+                label: 'Devenir professionnel',
+                onTap: () async {
+                  final ok = await ref
+                      .read(authControllerProvider.notifier)
+                      .becomePro();
+                  if (!context.mounted) return;
+                  if (ok) {
+                    context.push('/pro-profile-edit');
+                  } else {
+                    final error = ref.read(authControllerProvider).error;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          error ?? 'Impossible de passer en compte professionnel',
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+            if (user.valueOrNull?.role == UserRole.admin)
+              _MenuItem(
+                icon: Icons.admin_panel_settings_outlined,
+                label: 'Administration',
+                onTap: () => context.push('/admin'),
               ),
             _MenuItem(
               icon: Icons.location_on_outlined,

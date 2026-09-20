@@ -4,6 +4,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fixnow/services/firestore_service.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 import 'package:fixnow/models/chat_model.dart';
+import 'package:fixnow/features/notifications/notification_helpers.dart';
+import 'package:fixnow/models/notification_model.dart';
+import 'package:fixnow/models/user_model.dart';
+
+/// Resolves a user profile by uid (names/avatars in chat screens).
+final userByIdProvider = FutureProvider.autoDispose.family<AppUser?, String>(
+  (ref, uid) {
+    if (uid.isEmpty) return Future.value(null);
+    return ref.watch(firestoreServiceProvider).getUser(uid);
+  },
+);
 
 /// State for chat list.
 class ChatListState {
@@ -71,26 +82,26 @@ class ChatDetailState {
   final List<ChatMessage> messages;
   final bool isLoading;
   final String? error;
-  final String? otherName;
+  final String? otherId;
 
   const ChatDetailState({
     this.messages = const [],
     this.isLoading = false,
     this.error,
-    this.otherName,
+    this.otherId,
   });
 
   ChatDetailState copyWith({
     List<ChatMessage>? messages,
     bool? isLoading,
     String? error,
-    String? otherName,
+    String? otherId,
   }) {
     return ChatDetailState(
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
       error: error,
-      otherName: otherName ?? this.otherName,
+      otherId: otherId ?? this.otherId,
     );
   }
 }
@@ -117,7 +128,8 @@ class ChatDetailController extends StateNotifier<ChatDetailState> {
     chatSub = chatsStream.listen((chats) {
       final chat = chats.where((chat) => chat.id == chatId).firstOrNull;
       if (chat != null) {
-        state = state.copyWith(otherName: _otherName(chat, user?.uid));
+        final other = chat.clientId == user?.uid ? chat.proId : chat.clientId;
+        state = state.copyWith(otherId: other);
       }
     });
 
@@ -129,12 +141,6 @@ class ChatDetailController extends StateNotifier<ChatDetailState> {
         state = state.copyWith(isLoading: false, error: e.toString());
       },
     ).onDone(chatSub.cancel);
-  }
-
-  String? _otherName(Chat chat, String? currentUid) {
-    // We don't have user lookup here, so we return a stable fallback.
-    if (chat.clientId == currentUid) return 'Propriétaire';
-    return 'Client';
   }
 
   Future<void> sendMessage(String text) async {
@@ -152,6 +158,30 @@ class ChatDetailController extends StateNotifier<ChatDetailState> {
 
     try {
       await _ref.read(firestoreServiceProvider).sendMessage(chatId, message);
+
+      // Notify the other participant (best-effort).
+      try {
+        final chatDoc = await FirebaseFirestore.instance
+            .collection('chats')
+            .doc(chatId)
+            .get();
+        final data = chatDoc.data();
+        if (data != null) {
+          final otherId = data['clientId'] == user.uid
+              ? data['proId'] as String?
+              : data['clientId'] as String?;
+          if (otherId != null && otherId.isNotEmpty) {
+            await pushNotification(
+              _ref,
+              userId: otherId,
+              type: NotificationType.newMessage,
+              relatedId: chatId,
+              title: 'Nouveau message',
+              body: text.trim(),
+            );
+          }
+        }
+      } catch (_) {}
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }

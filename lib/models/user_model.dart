@@ -2,9 +2,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum UserRole { client, pro, admin }
 
+/// An account can be a client AND a professional at the same time:
+/// - [isPro] enables the pro capabilities (dashboard, profile, services).
+/// - Clients can book services (true for everyone, pro included).
+/// - [role] == admin is an extra, additive moderation privilege.
 class AppUser {
   final String uid;
   final UserRole role;
+
+  /// True when this account also acts as a professional.
+  /// Derived from [role] == pro for legacy accounts.
+  final bool isPro;
   final String name;
   final String email;
   final String? phone;
@@ -14,7 +22,8 @@ class AppUser {
 
   const AppUser({
     required this.uid,
-    required this.role,
+    this.role = UserRole.client,
+    this.isPro = false,
     required this.name,
     required this.email,
     this.phone,
@@ -25,12 +34,15 @@ class AppUser {
 
   factory AppUser.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    final role = UserRole.values.firstWhere(
+      (e) => e.name == data['role'],
+      orElse: () => UserRole.client,
+    );
     return AppUser(
       uid: doc.id,
-      role: UserRole.values.firstWhere(
-        (e) => e.name == data['role'],
-        orElse: () => UserRole.client,
-      ),
+      role: role,
+      // Legacy accounts may still use role == 'pro'.
+      isPro: data['isPro'] == true || role == UserRole.pro,
       name: data['name'] ?? '',
       email: data['email'] ?? '',
       phone: data['phone'],
@@ -43,6 +55,7 @@ class AppUser {
   Map<String, dynamic> toFirestore() {
     return {
       'role': role.name,
+      'isPro': isPro,
       'name': name,
       'email': email,
       'phone': phone,
@@ -59,10 +72,12 @@ class AppUser {
     String? avatarUrl,
     String? fcmToken,
     UserRole? role,
+    bool? isPro,
   }) {
     return AppUser(
       uid: uid,
       role: role ?? this.role,
+      isPro: isPro ?? this.isPro,
       name: name ?? this.name,
       email: email ?? this.email,
       phone: phone ?? this.phone,

@@ -5,7 +5,6 @@ import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/utils/validators.dart';
 import 'package:fixnow/features/auth/auth_controller.dart';
-import 'package:fixnow/models/user_model.dart';
 
 /// Registration screen.
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -38,7 +37,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             name: _nameController.text.trim(),
             email: _emailController.text.trim(),
             password: _passwordController.text,
-            role: _isPro ? UserRole.pro : UserRole.client,
+            asPro: _isPro,
           );
 
       if (success && mounted) {

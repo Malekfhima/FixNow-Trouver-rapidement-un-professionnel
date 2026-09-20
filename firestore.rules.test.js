@@ -61,6 +61,46 @@ describe('users : rôle invariant', () => {
     );
   });
 
+  test("auto-promotion client -> pro autorisée (isPro + role ensemble)", async () => {
+    await seedUser('u7', 'client');
+    const db = authedDb('u7', 'client');
+    await assertSucceeds(
+      setDoc(doc(db, 'users', 'u7'), { isPro: true, role: 'pro' }, { merge: true })
+    );
+  });
+
+  test("auto-promotion avec role admin refusée", async () => {
+    await seedUser('u8', 'client');
+    const db = authedDb('u8', 'client');
+    await assertFails(
+      setDoc(doc(db, 'users', 'u8'), { isPro: true, role: 'admin' }, { merge: true })
+    );
+  });
+
+  test("isPro seul (sans role) refusé", async () => {
+    await seedUser('u9', 'client');
+    const db = authedDb('u9', 'client');
+    await assertFails(
+      setDoc(doc(db, 'users', 'u9'), { isPro: true }, { merge: true })
+    );
+  });
+
+  test("un pro ne peut PAS se rétrograder lui-même", async () => {
+    await seedUser('u10', 'pro');
+    const db = authedDb('u10', 'pro');
+    await assertFails(
+      setDoc(doc(db, 'users', 'u10'), { isPro: false, role: 'client' }, { merge: true })
+    );
+  });
+
+  test("un admin peut modifier n'importe quel rôle, y compris le sien", async () => {
+    await seedUser('admin5', 'admin');
+    const db = authedDb('admin5', 'admin');
+    await assertSucceeds(
+      setDoc(doc(db, 'users', 'admin5'), { isPro: false, role: 'client' }, { merge: true })
+    );
+  });
+
   test("un utilisateur peut modifier son profil sans toucher au rôle", async () => {
     await seedUser('u2', 'client');
     const db = authedDb('u2', 'client');
@@ -267,6 +307,117 @@ describe('reviews : prestation terminée + unicité', () => {
         proId: 'p9',
         rating: 5,
       })
+    );
+  });
+});
+
+describe('notifications : réservées au destinataire', () => {
+  test("un utilisateur peut créer une notification pour quelqu'un d'autre (actorId = soi)", async () => {
+    await seedUser('n1', 'client');
+    await seedUser('n2', 'pro');
+    const db = authedDb('n1', 'client');
+    await assertSucceeds(
+      setDoc(doc(db, 'notifications', 'notif1'), {
+        userId: 'n2',
+        actorId: 'n1',
+        type: 'newMessage',
+        title: 'Nouveau message',
+        body: 'Salut',
+        read: false,
+      })
+    );
+  });
+
+  test("création sans actorId = soi refusée", async () => {
+    await seedUser('n3', 'client');
+    const db = authedDb('n3', 'client');
+    await assertFails(
+      setDoc(doc(db, 'notifications', 'notif2'), {
+        userId: 'n4',
+        actorId: 'quelquun-dautre',
+        type: 'newMessage',
+        title: 'x',
+        body: 'y',
+      })
+    );
+  });
+
+  test("le destinataire peut lire et marquer comme lue, pas un autre", async () => {
+    await seedUser('n5', 'client');
+    await seedUser('n6', 'client');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'notifications', 'notif3'), {
+        userId: 'n5',
+        actorId: 'n6',
+        type: 'generic',
+        title: 't',
+        body: 'b',
+        read: false,
+      });
+    });
+    const recipient = authedDb('n5', 'client');
+    const intruder = authedDb('n6', 'client');
+    await assertSucceeds(getDoc(doc(recipient, 'notifications', 'notif3')));
+    await assertFails(getDoc(doc(intruder, 'notifications', 'notif3')));
+    await assertSucceeds(
+      setDoc(doc(recipient, 'notifications', 'notif3'), { read: true }, { merge: true })
+    );
+    await assertFails(
+      setDoc(doc(intruder, 'notifications', 'notif3'), { read: true }, { merge: true })
+    );
+  });
+});
+
+describe('serviceRequests : acceptation de devis par le client', () => {
+  test("le client peut passer quoted -> accepted", async () => {
+    await seedUser('q1', 'client');
+    await seedUser('q2', 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'serviceRequests', 'rq1'), {
+        clientId: 'q1',
+        proId: 'q2',
+        status: 'quoted',
+      });
+    });
+    const db = authedDb('q1', 'client');
+    await assertSucceeds(
+      setDoc(doc(db, 'serviceRequests', 'rq1'), { status: 'accepted' }, { merge: true })
+    );
+  });
+
+  test("le client ne peut pas passer pending -> accepted directement", async () => {
+    await seedUser('q3', 'client');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'serviceRequests', 'rq2'), {
+        clientId: 'q3',
+        status: 'pending',
+      });
+    });
+    const db = authedDb('q3', 'client');
+    await assertFails(
+      setDoc(doc(db, 'serviceRequests', 'rq2'), { status: 'accepted' }, { merge: true })
+    );
+  });
+});
+
+describe('professionals : agrégation des notes', () => {
+  test("un utilisateur authentifié peut écrire UNIQUEMENT ratingAvg/ratingCount", async () => {
+    await seedUser('p10', 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'professionals', 'p10'), {
+        name: 'Pro',
+        categories: ['Plomberie'],
+        status: 'approved',
+        ratingAvg: 0,
+        ratingCount: 0,
+      });
+    });
+    const db = authedDb('u1', 'client');
+    await assertSucceeds(
+      setDoc(doc(db, 'professionals', 'p10'), { ratingAvg: 4.5, ratingCount: 2 }, { merge: true })
+    );
+    await assertFails(
+      setDoc(doc(db, 'professionals', 'p10'), { ratingAvg: 5, status: 'rejected' }, { merge: true })
     );
   });
 });

@@ -5,6 +5,7 @@ import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/features/chat/chat_controller.dart';
 import 'package:fixnow/models/chat_model.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
+import 'package:fixnow/features/chat/chat_controller.dart' show userByIdProvider;
 
 /// Chat list screen showing all conversations.
 class ChatListScreen extends ConsumerWidget {
@@ -75,6 +76,9 @@ class _ChatListItem extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider);
     final otherId = chat.clientId == currentUser?.uid ? chat.proId : chat.clientId;
+    final other = otherId == null
+        ? null
+        : ref.watch(userByIdProvider(otherId)).valueOrNull;
 
     return GestureDetector(
       onTap: onTap,
@@ -91,7 +95,11 @@ class _ChatListItem extends ConsumerWidget {
             CircleAvatar(
               radius: 22,
               backgroundColor: AppColors.primaryContainer,
-              child: const Icon(Icons.person, color: AppColors.primary, size: 22),
+              backgroundImage:
+                  other?.avatarUrl != null ? NetworkImage(other!.avatarUrl!) : null,
+              child: other?.avatarUrl == null
+                  ? const Icon(Icons.person, color: AppColors.primary, size: 22)
+                  : null,
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -99,7 +107,9 @@ class _ChatListItem extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    otherId.isEmpty ? 'Utilisateur' : otherId.substring(0, otherId.length.clamp(0, 12)),
+                    other?.name.isNotEmpty == true
+                        ? other!.name
+                        : (otherId.isEmpty ? 'Utilisateur' : 'Conversation'),
                     style: AppTextStyles.h4,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

@@ -17,11 +17,14 @@ service cloud.firestore {
     }
 
     function isClient() {
-      return isAuth() && role() == 'client';
+      // Everyone can act as a client (book services), pros included.
+      return isAuth();
     }
 
     function isPro() {
-      return isAuth() && role() == 'pro';
+      // Pro capabilities via flag; legacy accounts may still use role == 'pro'.
+      // role() is tested first because legacy docs may lack the isPro field.
+      return isAuth() && (role() == 'pro' || caller().isPro == true);
     }
 
     function isAdmin() {
@@ -40,11 +43,19 @@ service cloud.firestore {
       // Users can create their own profile
       allow create: if isOwner(userId);
 
-      // Users can update their own profile — but never their own role.
-      // Only admins can change someone's role.
-      allow update: if isOwner(userId)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])
-        || isAdmin();
+      // Users can update their own profile — but never their own admin role.
+      // Self-upgrade to pro (isPro + role == 'pro') is allowed; role and isPro
+      // must move together and never grant admin.
+      allow update: if isAdmin()
+        || (isOwner(userId)
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isPro'])
+        )
+        || (isOwner(userId)
+          && request.resource.data.role == 'pro'
+          && request.resource.data.isPro == true
+          && resource.data.role != 'admin'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'isPro'])
+        );
 
       // Only admins can delete users
       allow delete: if isAdmin();
@@ -60,14 +71,20 @@ service cloud.firestore {
         isAdmin()
       );
 
-      // Pros can create their own professional profile
-      // Admins can create demo/seed profiles (doc id starts with 'demo-')
+      // Pros can create their own professional profile (first save after
+      // upgrading); admins can create demo/seed profiles (ids 'demo-*')
       allow create: if (isOwner(proId) && isPro())
         || (isAdmin() && proId.matches('demo-.*'));
 
       // Pros can update their own profile (except status — admin validation only)
       allow update: if isOwner(proId) && isPro() &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'ratingAvg', 'ratingCount']);
+
+      // Rating aggregation after a review (no Cloud Functions yet):
+      // any authenticated user may write ONLY ratingAvg/ratingCount.
+      // NOTE: a backend function should take this over in production.
+      allow update: if isAuth() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ratingAvg', 'ratingCount']);
 
       // Only admins can change professional status (approve/reject)
       allow update: if isAdmin();
@@ -91,12 +108,15 @@ service cloud.firestore {
       allow create: if isClient() &&
         request.resource.data.clientId == request.auth.uid;
 
-      // Client can update their own request (cancel only)
+      // Client can update their own request (cancel, or accept a quote)
       // Pro can update requests assigned to them (accept, decline, start, complete)
       // Admin can update any request
       allow update: if isAuth() && (
         (resource.data.clientId == request.auth.uid &&
          request.resource.data.status == 'cancelled') ||
+        (resource.data.clientId == request.auth.uid &&
+         request.resource.data.status == 'accepted' &&
+         resource.data.status == 'quoted') ||
         (resource.data.proId == request.auth.uid) ||
         isAdmin()
       );
@@ -157,6 +177,20 @@ service cloud.firestore {
 
       // No updates or deletions allowed for reviews (immutable)
       allow update, delete: if false;
+    }
+
+    // ── Notifications (in-app, client-side events) ───────────────────
+    match /notifications/{notificationId} {
+      // Only the recipient can read / mark-as-read / delete.
+      allow read, update, delete: if isAuth()
+        && resource.data.userId == request.auth.uid;
+
+      // Any authenticated user can create a notification for someone else
+      // (new message, quote received…). Without Cloud Functions this is
+      // client-side, so we bind every notification to its real actor.
+      allow create: if isAuth()
+        && request.resource.data.userId is string
+        && request.resource.data.actorId == request.auth.uid;
     }
 
     // ── Categories (admin only) ───────────────────────────────────────
