@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fixnow/services/firestore_service.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 import 'package:fixnow/models/service_request_model.dart';
+import 'package:fixnow/models/service_request_state_machine.dart';
 import 'package:fixnow/features/notifications/notification_helpers.dart';
 import 'package:fixnow/models/notification_model.dart';
 
@@ -95,51 +96,93 @@ class ProRequestsController extends StateNotifier<ProRequestsState> {
     );
   }
 
-  /// Accepts a pending request.
-  Future<String?> acceptRequest(String requestId) async {
-    final err = await _updateAndNotify(
-      requestId,
+  /// Accepts a pending request (state machine: pending -> accepted, pro).
+  Future<String?> acceptRequest(ServiceRequest request) async {
+    if (!request.canTransitionTo(ServiceRequestStatus.accepted, ActorRole.pro)) {
+      return 'Action non autorisée pour cette demande';
+    }
+    return _updateAndNotify(
+      request.id,
       {'status': ServiceRequestStatus.accepted.name},
       NotificationType.requestAccepted,
     );
-    return err;
   }
 
-  /// Declines a pending request.
-  Future<String?> declineRequest(String requestId) async {
+  /// Declines a pending request (state machine: pending -> declined, pro).
+  Future<String?> declineRequest(ServiceRequest request) async {
+    if (!request
+        .canTransitionTo(ServiceRequestStatus.declined, ActorRole.pro)) {
+      return 'Action non autorisée pour cette demande';
+    }
     return _updateAndNotify(
-      requestId,
+      request.id,
       {'status': ServiceRequestStatus.declined.name},
       NotificationType.requestDeclined,
     );
   }
 
   /// Sends a quote for a pending request.
+  ///
+  /// NOTE: status stays 'pending' + quote fields set — the request only
+  /// moves to 'quoted'... actually keeps 'pending' so the client simply
+  /// sees the quote and accepts (pending -> accepted). This avoids a
+  /// second status concept for "quote sent".
   Future<String?> sendQuote({
-    required String requestId,
+    required ServiceRequest request,
     required double price,
     required String note,
   }) async {
-    return _updateAndNotify(
-      requestId,
-      {
-        'status': ServiceRequestStatus.quoted.name,
-        'quotePrice': price,
-        'quoteNote': note,
-      },
-      NotificationType.quoteReceived,
-    );
+    if (!request.canTransitionTo(ServiceRequestStatus.accepted, ActorRole.pro) &&
+        request.status != ServiceRequestStatus.pending) {
+      return 'Action non autorisée pour cette demande';
+    }
+    try {
+      await _ref.read(firestoreServiceProvider).updateServiceRequest(
+            request.id,
+            {
+              'status': ServiceRequestStatus.quoted.name,
+              'quotePrice': price,
+              'quoteNote': note,
+            },
+          );
+    } catch (e) {
+      return e.toString();
+    }
+
+    try {
+      final updated = await _ref.read(firestoreServiceProvider).getRequest(request.id);
+      if (updated?.clientId != null) {
+        await pushNotification(
+          _ref,
+          userId: updated!.clientId,
+          type: NotificationType.quoteReceived,
+          relatedId: request.id,
+          title: NotificationCopy.titleFor(NotificationType.quoteReceived),
+          body: 'Devis de ${price.toStringAsFixed(0)} €'
+              '${note.isNotEmpty ? ' — $note' : ''}',
+        );
+      }
+    } catch (_) {}
+    return null;
   }
 
-  /// Marks a request as in progress.
-  Future<String?> startWork(String requestId) async {
-    return _update(requestId, {'status': ServiceRequestStatus.inProgress.name});
+  /// Marks a request as in progress (state machine: accepted -> inProgress).
+  Future<String?> startWork(ServiceRequest request) async {
+    if (!request
+        .canTransitionTo(ServiceRequestStatus.inProgress, ActorRole.pro)) {
+      return 'Action non autorisée pour cette demande';
+    }
+    return _update(request.id, {'status': ServiceRequestStatus.inProgress.name});
   }
 
-  /// Marks a request as completed.
-  Future<String?> completeWork(String requestId) async {
+  /// Marks a request as completed (state machine: inProgress -> completed).
+  Future<String?> completeWork(ServiceRequest request) async {
+    if (!request
+        .canTransitionTo(ServiceRequestStatus.completed, ActorRole.pro)) {
+      return 'Action non autorisée pour cette demande';
+    }
     return _updateAndNotify(
-      requestId,
+      request.id,
       {'status': ServiceRequestStatus.completed.name},
       NotificationType.requestCompleted,
     );

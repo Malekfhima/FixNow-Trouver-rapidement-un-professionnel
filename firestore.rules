@@ -109,18 +109,44 @@ service cloud.firestore {
       allow create: if isClient() &&
         request.resource.data.clientId == request.auth.uid;
 
-      // Client can update their own request (cancel, or accept a quote)
-      // Pro can update requests assigned to them (accept, decline, start, complete)
-      // Admin can update any request
-      allow update: if isAuth() && (
-        (resource.data.clientId == request.auth.uid &&
-         request.resource.data.status == 'cancelled') ||
-        (resource.data.clientId == request.auth.uid &&
-         request.resource.data.status == 'accepted' &&
-         resource.data.status == 'quoted') ||
-        (resource.data.proId == request.auth.uid) ||
-        isAdmin()
-      );
+      // ── State machine (must mirror lib/models/service_request_state_machine.dart)
+      //   pending    -> accepted (pro) | declined (pro) | cancelled (client)
+      //   accepted   -> inProgress (pro) | cancelled (client)
+      //   quoted     -> accepted (client) | cancelled (client)
+      //   inProgress -> completed (pro)
+      // Terminal (completed / declined / cancelled): no transition.
+      function validTransition(from, to) {
+        return
+          (from == 'pending' && to == 'accepted') ||
+          (from == 'pending' && to == 'declined') ||
+          (from == 'pending' && to == 'cancelled') ||
+          (from == 'accepted' && to == 'inProgress') ||
+          (from == 'accepted' && to == 'cancelled') ||
+          (from == 'quoted' && to == 'accepted') ||
+          (from == 'quoted' && to == 'cancelled') ||
+          (from == 'inProgress' && to == 'completed');
+      }
+
+      function fromStatus() { return resource.data.status; }
+      function toStatus() { return request.resource.data.status; }
+      function isClientActor() { return resource.data.clientId == request.auth.uid; }
+      function isProActor() { return resource.data.proId == request.auth.uid; }
+      function statusUnchanged() { return toStatus() == fromStatus(); }
+
+      // The update must be a valid transition by the right actor —
+      // OR a same-status partial edit (metadata, quote details…).
+      // NOTE: admins are NOT exempt from the state machine — even they
+      // cannot force an invalid transition (safest option, CHANGELOG).
+      // Admin write access to requests is read/serve-side only.
+      allow update: if (validTransition(fromStatus(), toStatus()) &&
+            ((toStatus() == 'cancelled' && isClientActor()) ||
+             (toStatus() == 'accepted' &&
+               ((fromStatus() == 'pending' && isProActor()) ||
+                (fromStatus() == 'quoted' && isClientActor()))) ||
+             (toStatus() == 'declined' && isProActor()) ||
+             (toStatus() == 'inProgress' && isProActor()) ||
+             (toStatus() == 'completed' && isProActor())))
+        || ((isClientActor() || isProActor()) && statusUnchanged());
 
       // Only admins can delete requests
       allow delete: if isAdmin();
@@ -211,11 +237,14 @@ service cloud.firestore {
         isAdmin()
       );
 
-      // Any authenticated user can create a report
-      allow create: if isAuth() && request.resource.data.reporterId == request.auth.uid;
+      // Any authenticated user can create a report bound to themselves
+      allow create: if isAuth()
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.status == 'open';
 
-      // Only admins can update reports (investigate, resolve)
-      allow update: if isAdmin();
+      // Only admins can update reports (investigate, resolve/dismiss)
+      allow update: if isAdmin()
+        && request.resource.data.status in ['resolved', 'dismissed'];
 
       // Only admins can delete reports
       allow delete: if isAdmin();

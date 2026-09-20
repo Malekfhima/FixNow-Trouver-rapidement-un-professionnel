@@ -162,6 +162,32 @@ class AdminController extends StateNotifier<AdminState> {
       return e.toString();
     }
   }
+
+  // ── Reports (moderation) ─────────────────────────────────────────
+
+  /// Live stream of open reports for the admin tab.
+  Stream<List<Map<String, dynamic>>> openReportsStream() {
+    return _db
+        .collection('reports')
+        .where('status', isEqualTo: 'open')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => {'id': d.id, ...d.data()}).toList());
+  }
+
+  /// Marks a report as resolved or dismissed.
+  Future<String?> resolveReport(String reportId, {required bool valid}) async {
+    try {
+      await _db.collection('reports').doc(reportId).update({
+        'status': valid ? 'resolved' : 'dismissed',
+        'resolvedAt': FieldValue.serverTimestamp(),
+      });
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
 }
 
 final adminControllerProvider =

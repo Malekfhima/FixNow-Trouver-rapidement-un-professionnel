@@ -1,6 +1,11 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
+import 'package:fixnow/services/storage_service.dart';
 import 'package:fixnow/services/firestore_service.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 import 'package:fixnow/models/chat_model.dart';
@@ -109,10 +114,66 @@ class ChatDetailState {
 class ChatDetailController extends StateNotifier<ChatDetailState> {
   final Ref _ref;
   final String chatId;
+  StreamSubscription<List<ChatMessage>>? _messagesSub;
 
   ChatDetailController(this._ref, this.chatId) : super(const ChatDetailState()) {
     loadChat();
+    _markReadOnOpen();
   }
+
+  /// Marks the conversation as read for the current user (opening it).
+  Future<void> _markReadOnOpen() async {
+    final user = _ref.read(currentUserProvider);
+    if (user == null) return;
+    try {
+      await _ref.read(firestoreServiceProvider).markChatRead(chatId, user.uid);
+    } catch (_) {
+      // Best-effort: reading the chat still works if the mark fails.
+    }
+  }
+
+  /// Re-marks the chat as read (called when returning to the screen).
+  Future<void> markReadNow() async {
+    final user = _ref.read(currentUserProvider);
+    if (user == null) return;
+    try {
+      await _ref.read(firestoreServiceProvider).markChatRead(chatId, user.uid);
+    } catch (_) {}
+  }
+
+  /// Uploads an image and sends it as a chat message.
+  Future<void> sendImage() async {
+    final user = _ref.read(currentUserProvider);
+    if (user == null) return;
+
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 75,
+      );
+      if (picked == null) return;
+
+      state = state.copyWith(isLoading: true);
+      final storage = _ref.read(storageServiceProvider);
+      final url = await storage.uploadChatImage(
+        chatId,
+        const Uuid().v4(),
+        File(picked.path),
+      );
+      await sendMessage('', imageUrl: url);
+      state = state.copyWith(isLoading: false);
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Envoi de l\'image impossible',
+      );
+      debugPrint('sendImage failed: $e');
+    }
+  }
+
+  StreamSubscription<List<Chat>>? _chatsSub;
 
   void loadChat() {
     state = state.copyWith(isLoading: true, error: null);
@@ -120,31 +181,36 @@ class ChatDetailController extends StateNotifier<ChatDetailState> {
     final firestore = _ref.read(firestoreServiceProvider);
     final user = _ref.read(currentUserProvider);
 
-    final messagesStream = firestore.messagesStream(chatId);
-    final chatsStream = firestore.userChatsStream(user?.uid ?? '');
-
-    // Keep a handle on the chat list so we can derive participant info.
-    StreamSubscription<List<Chat>>? chatSub;
-    chatSub = chatsStream.listen((chats) {
-      final chat = chats.where((chat) => chat.id == chatId).firstOrNull;
-      if (chat != null) {
-        final other = chat.clientId == user?.uid ? chat.proId : chat.clientId;
-        state = state.copyWith(otherId: other);
-      }
-    });
-
-    messagesStream.listen(
+    // Both subscriptions are kept and cancelled on dispose (no leak).
+    _messagesSub?.cancel();
+    _messagesSub = firestore.messagesStream(chatId).listen(
       (messages) {
         state = state.copyWith(messages: messages, isLoading: false);
       },
       onError: (e, st) {
         state = state.copyWith(isLoading: false, error: e.toString());
       },
-    ).onDone(chatSub.cancel);
+    );
+
+    _chatsSub?.cancel();
+    _chatsSub = firestore.userChatsStream(user?.uid ?? '').listen((chats) {
+      final chat = chats.where((chat) => chat.id == chatId).firstOrNull;
+      if (chat != null) {
+        final other = chat.clientId == user?.uid ? chat.proId : chat.clientId;
+        state = state.copyWith(otherId: other);
+      }
+    });
   }
 
-  Future<void> sendMessage(String text) async {
-    if (text.trim().isEmpty) return;
+  @override
+  void dispose() {
+    _messagesSub?.cancel();
+    _chatsSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> sendMessage(String text, {String? imageUrl}) async {
+    if (text.trim().isEmpty && imageUrl == null) return;
 
     final user = _ref.read(currentUserProvider);
     if (user == null) return;
@@ -153,11 +219,16 @@ class ChatDetailController extends StateNotifier<ChatDetailState> {
       id: '', // Firestore will provide the document id
       senderId: user.uid,
       text: text.trim(),
+      imageUrl: imageUrl,
       timestamp: DateTime.now(),
     );
 
     try {
-      await _ref.read(firestoreServiceProvider).sendMessage(chatId, message);
+      await _ref.read(firestoreServiceProvider).sendMessage(
+            chatId,
+            message,
+            senderId: user.uid,
+          );
 
       // Notify the other participant (best-effort).
       try {

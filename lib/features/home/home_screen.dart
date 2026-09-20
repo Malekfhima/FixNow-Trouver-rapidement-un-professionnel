@@ -22,7 +22,7 @@ class HomeScreen extends ConsumerWidget {
     final userProfile = ref.watch(userProfileProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () => ref.read(homeControllerProvider.notifier).fetchData(),
@@ -61,7 +61,7 @@ class HomeScreen extends ConsumerWidget {
           // Avatar
           CircleAvatar(
             radius: 24,
-            backgroundColor: AppColors.primaryContainer,
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
             backgroundImage:
                 user?.avatarUrl != null ? NetworkImage(user.avatarUrl!) : null,
             child: user?.avatarUrl == null
@@ -75,7 +75,7 @@ class HomeScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'Hello 👋',
                   style: AppTextStyles.bodySmall,
                 ),
@@ -98,13 +98,13 @@ class HomeScreen extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.sm),
                   decoration: BoxDecoration(
-                    color: AppColors.white,
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: AppRadius.mdAll,
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.notifications_outlined,
-                    color: AppColors.textPrimary,
+                    color: Theme.of(context).colorScheme.onSurface,
                     size: 22,
                   ),
                 ),
@@ -123,8 +123,8 @@ class HomeScreen extends ConsumerWidget {
                       child: Center(
                         child: Text(
                           '$unreadCount',
-                          style: const TextStyle(
-                            color: AppColors.white,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onPrimary,
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
                           ),
@@ -153,16 +153,16 @@ class HomeScreen extends ConsumerWidget {
             vertical: AppSpacing.md,
           ),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: AppRadius.xlAll,
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
             boxShadow: AppShadows.sm,
           ),
           child: Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.search_rounded,
-                color: AppColors.textHint,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 size: 22,
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -170,7 +170,7 @@ class HomeScreen extends ConsumerWidget {
                 child: Text(
                   'Rechercher un service...',
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textHint,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -232,10 +232,10 @@ class HomeScreen extends ConsumerWidget {
                       color: AppColors.accent,
                       borderRadius: AppRadius.smAll,
                     ),
-                    child: const Text(
+                    child: Text(
                       'OFFRE LIMITÉE',
                       style: TextStyle(
-                        color: AppColors.white,
+                        color: Theme.of(context).colorScheme.onPrimary,
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.5,
@@ -243,19 +243,19 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  const Text(
+                  Text(
                     'Économisez 25%',
                     style: TextStyle(
-                      color: AppColors.white,
+                      color: Theme.of(context).colorScheme.onPrimary,
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
                       height: 1.2,
                     ),
                   ),
-                  const Text(
+                  Text(
                     'aujourd\'hui !',
                     style: TextStyle(
-                      color: AppColors.white,
+                      color: Theme.of(context).colorScheme.onPrimary,
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
                       height: 1.2,
@@ -265,7 +265,7 @@ class HomeScreen extends ConsumerWidget {
                   Text(
                     'Sur votre premier service réservé',
                     style: TextStyle(
-                      color: AppColors.white.withValues(alpha: 0.85),
+                      color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.85),
                       fontSize: 13,
                     ),
                   ),
@@ -278,7 +278,7 @@ class HomeScreen extends ConsumerWidget {
                     label: const Text('Réserver maintenant'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.accent,
-                      foregroundColor: AppColors.white,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.lg,
@@ -321,21 +321,23 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildServicesGrid(BuildContext context) {
     final services = [
-      _ServiceItem(Icons.plumbing_rounded, 'Plombier', AppColors.plomberie, AppColors.plomberieLight),
-      _ServiceItem(Icons.electrical_services_rounded, 'Électricien', AppColors.electricite, AppColors.electriciteLight),
-      _ServiceItem(Icons.carpenter_rounded, 'Menuisier', AppColors.menuiserie, AppColors.menuiserieLight),
-      _ServiceItem(Icons.format_paint_rounded, 'Peintre', AppColors.peinture, AppColors.peintureLight),
-      _ServiceItem(Icons.construction_rounded, 'Maçon', AppColors.maconnerie, AppColors.maconnerieLight),
-      _ServiceItem(Icons.build_circle_rounded, 'Soudeur', AppColors.soudure, AppColors.soudureLight),
-      _ServiceItem(Icons.home_repair_service_rounded, 'Couvreur', AppColors.couverture, AppColors.couvertureLight),
-      _ServiceItem(Icons.more_horiz_rounded, 'Voir plus', AppColors.textSecondary, AppColors.soudureLight),
+      // `category` = nom exact utilisé dans Firestore (pro.categories) pour
+      // que le filtre de l'écran Recherche fonctionne directement.
+      _ServiceItem(Icons.plumbing_rounded, 'Plombier', AppColors.plomberie, AppColors.plomberieLight, 'Plomberie'),
+      _ServiceItem(Icons.electrical_services_rounded, 'Électricien', AppColors.electricite, AppColors.electriciteLight, 'Électricité'),
+      _ServiceItem(Icons.carpenter_rounded, 'Menuisier', AppColors.menuiserie, AppColors.menuiserieLight, 'Menuiserie'),
+      _ServiceItem(Icons.format_paint_rounded, 'Peintre', AppColors.peinture, AppColors.peintureLight, 'Peinture'),
+      _ServiceItem(Icons.construction_rounded, 'Maçon', AppColors.maconnerie, AppColors.maconnerieLight, 'Maçonnerie'),
+      _ServiceItem(Icons.build_circle_rounded, 'Soudeur', AppColors.soudure, AppColors.soudureLight, 'Soudure'),
+      _ServiceItem(Icons.home_repair_service_rounded, 'Couvreur', AppColors.couverture, AppColors.couvertureLight, 'Couverture'),
+      _ServiceItem(Icons.more_horiz_rounded, 'Voir plus', Theme.of(context).colorScheme.onSurfaceVariant, AppColors.soudureLight, null),
     ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.xl),
           child: Text('Services les plus réservés', style: AppTextStyles.h3),
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -358,7 +360,11 @@ class HomeScreen extends ConsumerWidget {
                 label: s.label,
                 iconColor: s.color,
                 backgroundColor: s.bgColor,
-                onTap: () => context.push('/search?category=${s.label}'),
+                onTap: () => context.push(
+                  s.category == null
+                      ? '/search'
+                      : '/search?category=${Uri.encodeComponent(s.category!)}',
+                ),
               );
             },
           ),
@@ -378,7 +384,7 @@ class HomeScreen extends ConsumerWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Populaire près de vous', style: AppTextStyles.h3),
+              const Text('Populaire près de vous', style: AppTextStyles.h3),
               GestureDetector(
                 onTap: () => context.push('/search'),
                 child: Text(
@@ -394,7 +400,7 @@ class HomeScreen extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         if (state.isLoading)
-          _buildShimmerList()
+          _buildShimmerList(context)
         else if (state.error != null)
           Center(child: Text('Erreur: ${state.error}'))
         else if (state.popularPros.isEmpty)
@@ -420,8 +426,8 @@ class HomeScreen extends ConsumerWidget {
                   child: ProCard(
                     name: pro.name,
                     category: pro.categories.isNotEmpty ? pro.categories.first : 'Artisan',
-                    categoryColor: _categoryColor(pro.categories.firstOrNull),
-                    categoryBgColor: _categoryBgColor(pro.categories.firstOrNull),
+                    categoryColor: _categoryColor(context, pro.categories.firstOrNull),
+                    categoryBgColor: _categoryBgColor(context, pro.categories.firstOrNull),
                     rating: pro.ratingAvg,
                     reviewCount: pro.ratingCount,
                     price: pro.hourlyRate,
@@ -437,7 +443,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildShimmerList() {
+  Widget _buildShimmerList(BuildContext context) {
     return SizedBox(
       height: 160,
       child: ListView.separated(
@@ -445,51 +451,70 @@ class HomeScreen extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
         itemCount: 3,
         separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.lg),
-        itemBuilder: (_, __) => Shimmer.fromColors(
-          baseColor: Colors.grey[300]!,
-          highlightColor: Colors.grey[100]!,
-          child: Container(
-            width: 300,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: AppRadius.lgAll,
+        itemBuilder: (_, __) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return Shimmer.fromColors(
+            baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+            highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+            child: Container(
+              width: 300,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: AppRadius.lgAll,
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
 
   // ── Local helpers ──────────────────────────────────────────────────────
 
-  Color _categoryColor(String? category) {
+  Color _categoryColor(BuildContext context, String? category) {
+    // Clés = noms de catégories tels qu'enregistrés dans Firestore.
     final map = <String, Color>{
-      'Plombier': AppColors.plomberie,
-      'Électricien': AppColors.electricite,
-      'Menuisier': AppColors.menuiserie,
-      'Peintre': AppColors.peinture,
-      'Maçon': AppColors.maconnerie,
-      'Soudeur': AppColors.soudure,
-      'Couvreur': AppColors.couverture,
+      'Plomberie': AppColors.plomberie,
+      'Électricité': AppColors.electricite,
+      'Menuiserie': AppColors.menuiserie,
+      'Peinture': AppColors.peinture,
+      'Maçonnerie': AppColors.maconnerie,
+      'Soudure': AppColors.soudure,
+      'Couverture': AppColors.couverture,
       'Ménage': AppColors.menage,
-      'Artisan': AppColors.textSecondary,
+      'Serrurerie': AppColors.serrurerie,
+      'Mécanique': AppColors.mecanique,
+      'Artisan': Theme.of(context).colorScheme.onSurfaceVariant,
     };
-    return map[category] ?? AppColors.textSecondary;
+    final base = map[category] ?? Theme.of(context).colorScheme.onSurfaceVariant;
+    // En sombre : éclaircir l'icône pour garder le contraste sur le fond assombri.
+    if (Theme.of(context).brightness == Brightness.dark) {
+      return Color.lerp(base, Colors.white, 0.35)!;
+    }
+    return base;
   }
 
-  Color _categoryBgColor(String? category) {
+  Color _categoryBgColor(BuildContext context, String? category) {
+    // Clés = noms de catégories tels qu'enregistrés dans Firestore.
     final map = <String, Color>{
-      'Plombier': AppColors.plomberieLight,
-      'Électricien': AppColors.electriciteLight,
-      'Menuisier': AppColors.menuiserieLight,
-      'Peintre': AppColors.peintureLight,
-      'Maçon': AppColors.maconnerieLight,
-      'Soudeur': AppColors.soudureLight,
-      'Couvreur': AppColors.couvertureLight,
+      'Plomberie': AppColors.plomberieLight,
+      'Électricité': AppColors.electriciteLight,
+      'Menuiserie': AppColors.menuiserieLight,
+      'Peinture': AppColors.peintureLight,
+      'Maçonnerie': AppColors.maconnerieLight,
+      'Soudure': AppColors.soudureLight,
+      'Couverture': AppColors.couvertureLight,
       'Ménage': AppColors.menageLight,
+      'Serrurerie': AppColors.serrurerieLight,
+      'Mécanique': AppColors.mecaniqueLight,
       'Artisan': AppColors.soudureLight,
     };
-    return map[category] ?? AppColors.soudureLight;
+    final base = map[category] ?? AppColors.soudureLight;
+    // En sombre : assombrir le pastel pour éviter l'éblouissement.
+    if (Theme.of(context).brightness == Brightness.dark) {
+      return Color.lerp(base, Colors.black, 0.65)!;
+    }
+    return base;
   }
 }
 
@@ -498,5 +523,6 @@ class _ServiceItem {
   final String label;
   final Color color;
   final Color bgColor;
-  _ServiceItem(this.icon, this.label, this.color, this.bgColor);
+  final String? category;
+  _ServiceItem(this.icon, this.label, this.color, this.bgColor, this.category);
 }

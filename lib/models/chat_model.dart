@@ -48,6 +48,11 @@ class Chat {
   final DateTime lastMessageAt;
   final int unreadCount;
 
+  /// Per-side unread counters (reset when the respective participant opens
+  /// the conversation). [unreadCount] is kept for legacy documents.
+  final int unreadClient;
+  final int unreadPro;
+
   const Chat({
     required this.id,
     required this.clientId,
@@ -55,6 +60,8 @@ class Chat {
     required this.lastMessage,
     required this.lastMessageAt,
     this.unreadCount = 0,
+    this.unreadClient = 0,
+    this.unreadPro = 0,
   });
 
   factory Chat.fromFirestore(DocumentSnapshot doc) {
@@ -67,7 +74,16 @@ class Chat {
       lastMessageAt:
           (data['lastMessageAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       unreadCount: data['unreadCount'] ?? 0,
+      unreadClient: data['unreadClient'] ?? 0,
+      unreadPro: data['unreadPro'] ?? 0,
     );
+  }
+
+  /// Unread messages for [userId] in this conversation.
+  int unreadFor(String userId) {
+    if (userId == clientId) return unreadClient;
+    if (userId == proId) return unreadPro;
+    return 0;
   }
 
   Map<String, dynamic> toFirestore() {

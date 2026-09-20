@@ -143,6 +143,25 @@ class FirestoreService {
     });
   }
 
+  // ── Reports (moderation) ─────────────────────────────────────────
+
+  Stream<List<Map<String, dynamic>>> openReportsStream() {
+    return _db
+        .collection('reports')
+        .where('status', isEqualTo: 'open')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => {'id': d.id, ...d.data()}).toList());
+  }
+
+  Future<void> resolveReport(String reportId, String outcome) async {
+    await _db.collection('reports').doc(reportId).update({
+      'status': outcome, // 'resolved' | 'dismissed'
+      'resolvedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   // ── Categories ───────────────────────────────────────────────────
 
   Future<List<ServiceCategory>> getCategories() async {
@@ -333,24 +352,56 @@ class FirestoreService {
             .toList());
   }
 
-  Future<void> sendMessage(String chatId, ChatMessage message) async {
-    final batch = _db.batch();
+  /// Sends a message atomically: writes the message and updates the chat
+  /// metadata (last message, unread counter for the OTHER participant).
+  Future<void> sendMessage(
+    String chatId,
+    ChatMessage message, {
+    required String senderId,
+  }) async {
+    final chatRef = _db.collection('chats').doc(chatId);
 
-    // Add the message
-    final msgRef = _db
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .doc();
-    batch.set(msgRef, message.toFirestore());
+    await _db.runTransaction((tx) async {
+      final chatDoc = await tx.get(chatRef);
+      final data = chatDoc.data();
+      // The recipient is the participant who is NOT the sender.
+      final otherField = data?['clientId'] == senderId ? 'proId' : 'clientId';
+      final currentUnread = data?['unread${otherField == 'proId' ? 'Pro' : 'Client'}'] ?? 0;
 
-    // Update chat metadata
-    batch.update(_db.collection('chats').doc(chatId), {
-      'lastMessage': message.text,
-      'lastMessageAt': FieldValue.serverTimestamp(),
+      final msgRef = chatRef.collection('messages').doc();
+      tx.set(msgRef, message.toFirestore());
+      tx.update(chatRef, {
+        'lastMessage': message.text.isNotEmpty
+            ? message.text
+            : (message.imageUrl != null ? '📷 Photo' : ''),
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        // Per-side unread counters (recipient side is incremented).
+        'unread${otherField == 'proId' ? 'Pro' : 'Client'}': currentUnread + 1,
+      });
     });
+  }
 
-    await batch.commit();
+  /// Marks all messages of a chat as read for [userId] and resets their
+  /// unread counter. Called when opening a conversation.
+  Future<void> markChatRead(String chatId, String userId) async {
+    final chatRef = _db.collection('chats').doc(chatId);
+
+    await _db.runTransaction((tx) async {
+      final chatDoc = await tx.get(chatRef);
+      final data = chatDoc.data();
+      final unreadField = data?['clientId'] == userId ? 'unreadClient' : 'unreadPro';
+      if ((data?[unreadField] ?? 0) == 0) return; // nothing to do
+
+      final unread = await chatRef
+          .collection('messages')
+          .where('senderId', isNotEqualTo: userId)
+          .where('read', isEqualTo: false)
+          .get();
+      for (final doc in unread.docs) {
+        tx.update(doc.reference, {'read': true});
+      }
+      tx.update(chatRef, {unreadField: 0});
+    });
   }
 }
 

@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_alerts.dart';
+import 'package:fixnow/core/constants/app_constants.dart';
+import 'package:fixnow/services/storage_service.dart';
 import 'package:fixnow/core/utils/validators.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
@@ -48,6 +53,8 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
 
   final Set<String> _selectedCategories = {};
   final Set<String> _availableDays = {};
+  final List<String> _galleryUrls = [];
+  final List<File> _newGalleryFiles = [];
   bool _isLoading = true;
   bool _isSaving = false;
   String? _loadError;
@@ -86,6 +93,7 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
         _rateController.text =
             pro != null && pro.hourlyRate > 0 ? pro.hourlyRate.toStringAsFixed(0) : '';
         _selectedCategories.addAll(pro?.categories ?? []);
+        _galleryUrls.addAll(pro?.gallery ?? []);
         final availability = pro?.availability;
         if (availability != null && availability['days'] is List) {
           _availableDays.addAll(
@@ -103,12 +111,55 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
     }
   }
 
+  Future<void> _pickGalleryPhotos() async {
+    final picked = await ImagePicker().pickMultiImage(
+      maxWidth: 1920,
+      maxHeight: 1920,
+      imageQuality: 70,
+    );
+    if (picked.isEmpty) return;
+    setState(() {
+      _newGalleryFiles.addAll(picked.map((x) => File(x.path)));
+      final total = _galleryUrls.length + _newGalleryFiles.length;
+      if (total > AppConstants.maxGalleryPhotos) {
+        _newGalleryFiles
+            .removeRange(_newGalleryFiles.length - (total - AppConstants.maxGalleryPhotos),
+                _newGalleryFiles.length);
+      }
+    });
+  }
+
+  Widget _galleryThumb({required Widget child, required VoidCallback onRemove}) {
+    return Padding(
+      padding: const EdgeInsets.only(right: AppSpacing.sm),
+      child: Stack(
+        children: [
+          ClipRRect(borderRadius: AppRadius.mdAll, child: child),
+          Positioned(
+            right: 0,
+            top: 0,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  color: AppColors.error,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.close_rounded,
+                    color: Theme.of(context).colorScheme.onPrimary, size: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_selectedCategories.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sélectionnez au moins un métier')),
-      );
+      AppAlerts.warning(context, 'Sélectionnez au moins un métier');
       return;
     }
 
@@ -118,23 +169,36 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
     setState(() => _isSaving = true);
 
     try {
+      // Upload new gallery photos first (compressed by the picker).
+      final storage = ref.read(storageServiceProvider);
+      final uploaded = <String>[];
+      for (var i = 0; i < _newGalleryFiles.length; i++) {
+        final url = await storage.uploadGalleryImage(
+          uid,
+          _galleryUrls.length + i,
+          _newGalleryFiles[i],
+        );
+        uploaded.add(url);
+      }
+      final fullGallery = [..._galleryUrls, ...uploaded];
+      if (fullGallery.length > AppConstants.maxGalleryPhotos) {
+        fullGallery.removeRange(AppConstants.maxGalleryPhotos, fullGallery.length);
+      }
+
       await ref.read(firestoreServiceProvider).updateProfessional(uid, {
         'categories': _selectedCategories.toList(),
         'bio': _bioController.text.trim(),
         'city': _cityController.text.trim(),
         'hourlyRate': double.tryParse(_rateController.text) ?? 0,
         'availability': {'days': _availableDays.toList()},
+        'gallery': fullGallery,
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profil enregistré')),
-      );
+      AppAlerts.success(context, 'Profil enregistré');
       context.pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur : $e')),
-      );
+      AppAlerts.fromError(context, e);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -143,12 +207,12 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Mon profil pro'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -162,7 +226,7 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // ── Categories ──────────────────────────────
-                        Text('Métiers', style: AppTextStyles.h4),
+                        const Text('Métiers', style: AppTextStyles.h4),
                         const SizedBox(height: AppSpacing.sm),
                         Wrap(
                           spacing: AppSpacing.sm,
@@ -177,7 +241,7 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                                 v ? _selectedCategories.add(category)
                                   : _selectedCategories.remove(category);
                               }),
-                              selectedColor: AppColors.primaryContainer,
+                              selectedColor: Theme.of(context).colorScheme.primaryContainer,
                               checkmarkColor: AppColors.primary,
                             );
                           }).toList(),
@@ -185,7 +249,7 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                         const SizedBox(height: AppSpacing.xl),
 
                         // ── City ────────────────────────────────────
-                        Text('Zone d\'intervention', style: AppTextStyles.h4),
+                        const Text('Zone d\'intervention', style: AppTextStyles.h4),
                         const SizedBox(height: AppSpacing.md),
                         TextFormField(
                           controller: _cityController,
@@ -199,7 +263,7 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                         const SizedBox(height: AppSpacing.xl),
 
                         // ── Hourly rate ─────────────────────────────
-                        Text('Tarif horaire (€)', style: AppTextStyles.h4),
+                        const Text('Tarif horaire (€)', style: AppTextStyles.h4),
                         const SizedBox(height: AppSpacing.md),
                         TextFormField(
                           controller: _rateController,
@@ -221,7 +285,7 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                         const SizedBox(height: AppSpacing.xl),
 
                         // ── Bio ─────────────────────────────────────
-                        Text('Présentation', style: AppTextStyles.h4),
+                        const Text('Présentation', style: AppTextStyles.h4),
                         const SizedBox(height: AppSpacing.md),
                         TextFormField(
                           controller: _bioController,
@@ -235,7 +299,7 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                         const SizedBox(height: AppSpacing.xl),
 
                         // ── Availability ────────────────────────────
-                        Text('Disponibilités', style: AppTextStyles.h4),
+                        const Text('Disponibilités', style: AppTextStyles.h4),
                         const SizedBox(height: AppSpacing.sm),
                         Wrap(
                           spacing: AppSpacing.sm,
@@ -249,10 +313,66 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                                 v ? _availableDays.add(day)
                                   : _availableDays.remove(day);
                               }),
-                              selectedColor: AppColors.primaryContainer,
+                              selectedColor: Theme.of(context).colorScheme.primaryContainer,
                               checkmarkColor: AppColors.primary,
                             );
                           }).toList(),
+                        ),
+                        const SizedBox(height: AppSpacing.xl),
+
+                        // ── Gallery ───────────────────────────────
+                        Row(
+                          children: [
+                            const Text('Galerie de réalisations', style: AppTextStyles.h4),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: _galleryUrls.length +
+                                          _newGalleryFiles.length >=
+                                      AppConstants.maxGalleryPhotos
+                                  ? null
+                                  : _pickGalleryPhotos,
+                              icon: const Icon(Icons.add_photo_alternate_outlined,
+                                  size: 18),
+                              label: Text(
+                                  '${_galleryUrls.length + _newGalleryFiles.length}/${AppConstants.maxGalleryPhotos}'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        SizedBox(
+                          height: 96,
+                          child: (_galleryUrls.isEmpty && _newGalleryFiles.isEmpty)
+                              ? const Text(
+                                  'Montrez vos réalisations : cela rassure les clients.',
+                                  style: AppTextStyles.caption,
+                                )
+                              : ListView(
+                                  scrollDirection: Axis.horizontal,
+                                  children: [
+                                    for (var i = 0; i < _galleryUrls.length; i++)
+                                      _galleryThumb(
+                                        child: Image.network(
+                                          _galleryUrls[i],
+                                          width: 96,
+                                          height: 96,
+                                          fit: BoxFit.cover,
+                                        ),
+                                        onRemove: () =>
+                                            setState(() => _galleryUrls.removeAt(i)),
+                                      ),
+                                    for (var i = 0; i < _newGalleryFiles.length; i++)
+                                      _galleryThumb(
+                                        child: Image.file(
+                                          _newGalleryFiles[i],
+                                          width: 96,
+                                          height: 96,
+                                          fit: BoxFit.cover,
+                                        ),
+                                        onRemove: () => setState(
+                                            () => _newGalleryFiles.removeAt(i)),
+                                      ),
+                                  ],
+                                ),
                         ),
                         const SizedBox(height: AppSpacing.xxl),
 

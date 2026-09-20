@@ -18,15 +18,15 @@ class ProProfileScreen extends ConsumerWidget {
     final state = ref.watch(proProfileControllerProvider(proId));
 
     if (state.isLoading) {
-      return const Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (state.error != null) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         appBar: AppBar(title: const Text('Profil')),
         body: Center(
           child: Column(
@@ -34,7 +34,7 @@ class ProProfileScreen extends ConsumerWidget {
             children: [
               const Icon(Icons.error_outline, size: 64, color: AppColors.error),
               const SizedBox(height: AppSpacing.lg),
-              Text('Erreur de chargement', style: AppTextStyles.h4),
+              const Text('Erreur de chargement', style: AppTextStyles.h4),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 state.error!,
@@ -50,15 +50,15 @@ class ProProfileScreen extends ConsumerWidget {
     final pro = state.pro;
     if (pro == null) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         appBar: AppBar(title: const Text('Profil')),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.person_off_outlined, size: 64, color: AppColors.textHint),
+              Icon(Icons.person_off_outlined, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
               const SizedBox(height: AppSpacing.lg),
-              Text('Professionnel introuvable', style: AppTextStyles.h4),
+              const Text('Professionnel introuvable', style: AppTextStyles.h4),
             ],
           ),
         ),
@@ -66,7 +66,7 @@ class ProProfileScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: Stack(
         children: [
           // Scrollable content
@@ -91,8 +91,8 @@ class ProProfileScreen extends ConsumerWidget {
                         top: MediaQuery.of(context).padding.top + 8,
                         left: 16,
                         child: IconButton(
-                          icon: const Icon(Icons.arrow_back_rounded,
-                              color: AppColors.white),
+                          icon: Icon(Icons.arrow_back_rounded,
+                              color: Theme.of(context).colorScheme.onPrimary),
                           onPressed: () => Navigator.of(context).pop(),
                         ),
                       ),
@@ -106,8 +106,8 @@ class ProProfileScreen extends ConsumerWidget {
                               ? NetworkImage(pro.avatarUrl!)
                               : null,
                           child: pro.avatarUrl == null
-                              ? const Icon(Icons.person,
-                                  color: AppColors.white, size: 50)
+                              ? Icon(Icons.person,
+                                  color: Theme.of(context).colorScheme.onPrimary, size: 50)
                               : null,
                         ),
                       ),
@@ -143,7 +143,7 @@ class ProProfileScreen extends ConsumerWidget {
                                           vertical: 2,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: AppColors.primaryContainer,
+                                          color: Theme.of(context).colorScheme.primaryContainer,
                                           borderRadius:
                                               BorderRadius.circular(AppRadius.sm),
                                         ),
@@ -173,8 +173,8 @@ class ProProfileScreen extends ConsumerWidget {
                       const SizedBox(height: AppSpacing.lg),
                       Row(
                         children: [
-                          const Icon(Icons.location_on_outlined,
-                              color: AppColors.textSecondary, size: 18),
+                          Icon(Icons.location_on_outlined,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant, size: 18),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
@@ -189,18 +189,18 @@ class ProProfileScreen extends ConsumerWidget {
                         ],
                       ),
                       const SizedBox(height: AppSpacing.xl),
-                      Text('À propos de moi', style: AppTextStyles.h4),
+                      const Text('À propos de moi', style: AppTextStyles.h4),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
                         pro.bio.isNotEmpty
                             ? pro.bio
                             : 'Aucune description pour le moment.',
                         style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.textSecondary,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xl),
-                      Text('Réalisations', style: AppTextStyles.h4),
+                      const Text('Réalisations', style: AppTextStyles.h4),
                       const SizedBox(height: AppSpacing.md),
                     ],
                   ),
@@ -224,10 +224,10 @@ class ProProfileScreen extends ConsumerWidget {
                           pro.gallery[index],
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
-                            color: AppColors.primaryContainer,
-                            child: const Center(
+                            color: Theme.of(context).colorScheme.primaryContainer,
+                            child: Center(
                               child: Icon(Icons.broken_image_outlined,
-                                  color: AppColors.textHint),
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant),
                             ),
                           ),
                         ),
@@ -244,10 +244,10 @@ class ProProfileScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Avis', style: AppTextStyles.h4),
+                      const Text('Avis', style: AppTextStyles.h4),
                       const SizedBox(height: AppSpacing.md),
                       if (state.reviews.isEmpty)
-                        Text(
+                        const Text(
                           'Aucun avis pour le moment',
                           style: AppTextStyles.bodySmall,
                         )
@@ -278,10 +278,10 @@ class ProProfileScreen extends ConsumerWidget {
                 MediaQuery.of(context).padding.bottom + AppSpacing.lg,
               ),
               decoration: BoxDecoration(
-                color: AppColors.white,
+                color: Theme.of(context).colorScheme.surface,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.textPrimary.withValues(alpha: 0.08),
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08),
                     blurRadius: 20,
                     offset: const Offset(0, -4),
                   ),
@@ -326,9 +326,9 @@ class _ReviewTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: AppRadius.mdAll,
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

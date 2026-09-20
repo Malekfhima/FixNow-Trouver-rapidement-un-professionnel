@@ -7,6 +7,8 @@ import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/firebase_options.dart';
 import 'package:fixnow/routing/app_router.dart';
 import 'package:fixnow/core/widgets/app_bindings.dart';
+import 'package:fixnow/core/widgets/app_alerts.dart';
+import 'package:fixnow/core/theme/theme_mode_controller.dart';
 
 /// Background message handler — must be a top-level function.
 @pragma('vm:entry-point')
@@ -42,14 +44,19 @@ class FixNowApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
+    final themeMode =
+        ref.watch(themeModeControllerProvider).materialThemeMode;
 
     return AppBindings(
       child: MaterialApp.router(
         title: 'FixNow',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
-        // TODO: darkTheme: AppTheme.dark,
+        darkTheme: AppTheme.dark,
+        themeMode: themeMode,
         routerConfig: router,
+        builder: (context, child) =>
+            OfflineBanner(child: child ?? const SizedBox.shrink()),
       ),
     );
   }

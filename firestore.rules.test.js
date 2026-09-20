@@ -311,6 +311,79 @@ describe('reviews : prestation terminée + unicité', () => {
   });
 });
 
+describe('serviceRequests : machine à états stricte', () => {
+  async function seedRequest(id, clientId, proId, status) {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'serviceRequests', id), {
+        clientId,
+        proId,
+        status,
+        description: 'test',
+        address: 'test',
+      });
+    });
+  }
+
+  const STATUSES = ['pending', 'accepted', 'quoted', 'inProgress', 'completed', 'declined', 'cancelled'];
+  const VALID = new Set([
+    'pending>accepted', 'pending>declined', 'pending>cancelled',
+    'accepted>inProgress', 'accepted>cancelled',
+    'quoted>accepted', 'quoted>cancelled',
+    'inProgress>completed',
+  ]);
+  const ACTORS = {
+    client: 'cX', pro: 'pX', admin: 'aX',
+  };
+
+  // Matrice exhaustive : chaque (statut initial, statut cible, acteur).
+  for (const from of STATUSES) {
+    for (const to of STATUSES) {
+      for (const [actor, uid] of Object.entries(ACTORS)) {
+        const key = `${from}>${to}`;
+        // Édition sans changement de statut : autorisée aux participants
+        // (métadonnées). L'admin n'est PAS exempté de la machine à états
+        // (option la plus sûre, documentée dans CHANGELOG).
+        const sameStatus = from === to &&
+          (actor === 'client' || actor === 'pro');
+        const shouldPass = sameStatus ||
+          (VALID.has(key) &&
+            // Acteur attendu pour chaque transition
+            ((to === 'cancelled' && actor === 'client') ||
+             (to === 'accepted' && from === 'pending' && actor === 'pro') ||
+             (to === 'accepted' && from === 'quoted' && actor === 'client') ||
+             (to === 'declined' && actor === 'pro') ||
+             (to === 'inProgress' && actor === 'pro') ||
+             (to === 'completed' && actor === 'pro')));
+
+        test(`${from} -> ${to} par ${actor} : ${shouldPass ? 'autorisé' : 'refusé'}`, async () => {
+          await seedUser(uid, actor);
+          await seedUser('cX', 'client');
+          await seedUser('pX', 'pro');
+          await seedUser('aX', 'admin');
+          await seedRequest('mr1', 'cX', 'pX', from);
+          const db = authedDb(uid, actor);
+          const op = setDoc(doc(db, 'serviceRequests', 'mr1'), { status: to }, { merge: true });
+          if (shouldPass) {
+            await assertSucceeds(op);
+          } else {
+            await assertFails(op);
+          }
+        });
+      }
+    }
+  }
+
+  test('édition sans changement de statut autorisée (métadonnées)', async () => {
+    await seedUser('cX', 'client');
+    await seedUser('pX', 'pro');
+    await seedRequest('mr2', 'cX', 'pX', 'pending');
+    const db = authedDb('pX', 'pro');
+    await assertSucceeds(
+      setDoc(doc(db, 'serviceRequests', 'mr2'), { description: 'maj description' }, { merge: true })
+    );
+  });
+});
+
 describe('notifications : réservées au destinataire', () => {
   test("un utilisateur peut créer une notification pour quelqu'un d'autre (actorId = soi)", async () => {
     await seedUser('n1', 'client');
@@ -435,6 +508,74 @@ describe('professionals : agrégation des notes', () => {
     const db = authedDb('p11', 'pro');
     await assertFails(
       setDoc(doc(db, 'professionals', 'p11'), { ratingAvg: 5, ratingCount: 99 }, { merge: true })
+    );
+  });
+});
+
+describe('reports : signalements', () => {
+  test("un utilisateur peut créer un signalement lié à lui, statut open", async () => {
+    await seedUser('r1', 'client');
+    const db = authedDb('r1', 'client');
+    await assertSucceeds(
+      setDoc(doc(db, 'reports', 'rep1'), {
+        reporterId: 'r1',
+        targetType: 'pro',
+        targetId: 'p1',
+        reason: 'Comportement inapproprié',
+        status: 'open',
+      })
+    );
+  });
+
+  test("créer un signalement pour quelqu'un d'autre est refusé", async () => {
+    await seedUser('r2', 'client');
+    const db = authedDb('r2', 'client');
+    await assertFails(
+      setDoc(doc(db, 'reports', 'rep2'), {
+        reporterId: 'quelquun-dautre',
+        targetType: 'pro',
+        targetId: 'p1',
+        reason: 'x',
+        status: 'open',
+      })
+    );
+  });
+
+  test("seul l'admin peut résoudre/rejeter (status resolved/dismissed)", async () => {
+    await seedUser('r3', 'client');
+    await seedUser('admin9', 'admin');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'reports', 'rep3'), {
+        reporterId: 'r3',
+        targetType: 'pro',
+        targetId: 'p1',
+        reason: 'test',
+        status: 'open',
+      });
+    });
+    const reporter = authedDb('r3', 'client');
+    const admin = authedDb('admin9', 'admin');
+    // Le reporter ne peut pas résoudre son propre signalement
+    await assertFails(
+      setDoc(doc(reporter, 'reports', 'rep3'), { status: 'resolved' }, { merge: true })
+    );
+    // L'admin peut rejeter
+    await assertSucceeds(
+      setDoc(doc(admin, 'reports', 'rep3'), { status: 'dismissed' }, { merge: true })
+    );
+  });
+
+  test("l'admin ne peut pas remettre un signalement à 'open'", async () => {
+    await seedUser('admin10', 'admin');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'reports', 'rep4'), {
+        reporterId: 'r3',
+        status: 'resolved',
+      });
+    });
+    const admin = authedDb('admin10', 'admin');
+    await assertFails(
+      setDoc(doc(admin, 'reports', 'rep4'), { status: 'open' }, { merge: true })
     );
   });
 });

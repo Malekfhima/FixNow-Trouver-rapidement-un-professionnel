@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/utils/validators.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/features/auth/auth_controller.dart';
@@ -39,9 +40,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       setState(() => _emailSent = true);
     } else {
       final error = ref.read(authControllerProvider).error;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error ?? 'Échec de l\'envoi de l\'email')),
-      );
+      AppAlerts.error(context, error ?? 'Échec de l\'envoi de l\'email');
     }
   }
 
@@ -50,12 +49,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     final authState = ref.watch(authControllerProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Mot de passe oublié'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.xl),
@@ -65,7 +64,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: AppSpacing.xxl),
-              Text(
+              const Text(
                 'Réinitialiser\nvotre mot de passe',
                 style: AppTextStyles.h1,
               ),
@@ -74,7 +73,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                 'Saisissez votre adresse email, nous vous enverrons un lien '
                 'pour créer un nouveau mot de passe.',
                 style: AppTextStyles.bodyLarge.copyWith(
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: AppSpacing.xxxxl),
@@ -100,11 +99,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       color: AppColors.success.withValues(alpha: 0.4),
                     ),
                   ),
-                  child: Row(
+                  child: const Row(
                     children: [
-                      const Icon(Icons.mark_email_read_outlined,
+                      Icon(Icons.mark_email_read_outlined,
                           color: AppColors.success),
-                      const SizedBox(width: AppSpacing.md),
+                      SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Text(
                           'Email envoyé ! Vérifiez votre boîte de réception '

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
@@ -64,12 +63,12 @@ class _DebugSeedScreenState extends ConsumerState<DebugSeedScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Seed de démonstration'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.xl),
@@ -83,11 +82,11 @@ class _DebugSeedScreenState extends ConsumerState<DebugSeedScreen> {
                 borderRadius: AppRadius.mdAll,
                 border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
               ),
-              child: Row(
+              child: const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.warning_amber_rounded, color: AppColors.warning),
-                  const SizedBox(width: AppSpacing.md),
+                  Icon(Icons.warning_amber_rounded, color: AppColors.warning),
+                  SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Text(
                       'Écran de développement. Les données créées sont '
@@ -100,7 +99,7 @@ class _DebugSeedScreenState extends ConsumerState<DebugSeedScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.xl),
-            Text(
+            const Text(
               'Contenu du seed :',
               style: AppTextStyles.h4,
             ),
@@ -117,10 +116,10 @@ class _DebugSeedScreenState extends ConsumerState<DebugSeedScreen> {
                           ? Icons.check_circle
                           : Icons.cancel,
                   color: _demoPresent == null
-                      ? AppColors.textHint
+                      ? Theme.of(context).colorScheme.onSurfaceVariant
                       : _demoPresent!
                           ? AppColors.success
-                          : AppColors.textSecondary,
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
                   size: 18,
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -160,9 +159,9 @@ class _DebugSeedScreenState extends ConsumerState<DebugSeedScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
-                  color: AppColors.white,
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: AppRadius.mdAll,
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                 ),
                 child: Text(_message!, style: AppTextStyles.bodySmall),
               ),

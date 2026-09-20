@@ -5,6 +5,7 @@ import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/features/chat/chat_controller.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 import 'package:fixnow/models/chat_model.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fixnow/features/professional_profile/pro_profile_controller.dart';
 
 /// Chat detail screen for a single conversation.
@@ -23,6 +24,20 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   void dispose() {
     _messageController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Mark the conversation as read when it becomes visible again
+    // (returning to the screen with unread messages).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref
+            .read(chatDetailControllerProvider(widget.chatId).notifier)
+            .markReadNow();
+      }
+    });
   }
 
   void _sendMessage() {
@@ -45,16 +60,24 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
         : (ref.watch(proByIdProvider(otherId)).valueOrNull?.name ??
             ref.watch(userByIdProvider(otherId)).valueOrNull?.name ??
             'Conversation');
+    final otherAvatar = otherId == null
+        ? null
+        : (ref.watch(proByIdProvider(otherId)).valueOrNull?.avatarUrl ??
+            ref.watch(userByIdProvider(otherId)).valueOrNull?.avatarUrl);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: Row(
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: AppColors.primaryContainer,
-              child: const Icon(Icons.person, color: AppColors.primary, size: 20),
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              backgroundImage:
+                  otherAvatar != null ? NetworkImage(otherAvatar) : null,
+              child: otherAvatar == null
+                  ? const Icon(Icons.person, color: AppColors.primary, size: 20)
+                  : null,
             ),
             const SizedBox(width: AppSpacing.sm),
             Column(
@@ -82,7 +105,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
                 : state.error != null
                     ? Center(child: Text('Erreur: ${state.error}'))
                     : state.messages.isEmpty
-                        ? Center(
+                        ? const Center(
                             child: Text(
                               'Commencez la conversation...',
                               style: AppTextStyles.bodySmall,
@@ -104,10 +127,10 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
           Container(
             padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: BoxDecoration(
-              color: AppColors.white,
+              color: Theme.of(context).colorScheme.surface,
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.textPrimary.withValues(alpha: 0.05),
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, -2),
                 ),
@@ -118,9 +141,13 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.camera_alt_outlined,
-                        color: AppColors.textHint),
-                    onPressed: () {},
+                    icon: Icon(Icons.camera_alt_outlined,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    tooltip: 'Envoyer une photo',
+                    onPressed: () => ref
+                        .read(chatDetailControllerProvider(widget.chatId)
+                            .notifier)
+                        .sendImage(),
                   ),
                   Expanded(
                     child: TextField(
@@ -132,7 +159,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
                           borderSide: BorderSide.none,
                         ),
                         filled: true,
-                        fillColor: AppColors.background,
+                        fillColor: Theme.of(context).colorScheme.surface,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: AppSpacing.lg,
                           vertical: AppSpacing.sm,
@@ -148,8 +175,8 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.send_rounded,
-                          color: AppColors.white, size: 18),
+                      icon: Icon(Icons.send_rounded,
+                          color: Theme.of(context).colorScheme.onPrimary, size: 18),
                       onPressed: _sendMessage,
                     ),
                   ),
@@ -181,37 +208,55 @@ class _MessageBubble extends StatelessWidget {
           vertical: AppSpacing.md,
         ),
         decoration: BoxDecoration(
-          color: isMe ? AppColors.primary : AppColors.white,
+          color: isMe ? AppColors.primary : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(AppRadius.md),
             topRight: const Radius.circular(AppRadius.md),
             bottomLeft: Radius.circular(isMe ? AppRadius.md : 4),
             bottomRight: Radius.circular(isMe ? 4 : AppRadius.md),
           ),
-          border: isMe ? null : Border.all(color: AppColors.border),
+          border: isMe ? null : Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         ),
         child: Column(
           crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            if (!isMe)
-              Text(
-                _formatTime(message.timestamp),
-                style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-              ),
-            const SizedBox(height: 2),
-            Text(
-              message.text,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: isMe ? AppColors.white : AppColors.textPrimary,
-              ),
-            ),
-            if (isMe)
-              Text(
-                _formatTime(message.timestamp),
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.white.withValues(alpha: 0.8),
+            // Image message (optional)
+            if (message.imageUrl != null) ...[
+              ClipRRect(
+                borderRadius: AppRadius.mdAll,
+                child: CachedNetworkImage(
+                  imageUrl: message.imageUrl!,
+                  width: 220,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => const SizedBox(
+                    width: 220,
+                    height: 140,
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (_, __, ___) => const SizedBox(
+                    width: 220,
+                    height: 60,
+                    child: Center(child: Icon(Icons.broken_image_outlined)),
+                  ),
                 ),
               ),
+              const SizedBox(height: AppSpacing.xs),
+            ],
+            if (message.text.isNotEmpty)
+              Text(
+                message.text,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: isMe ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            Text(
+              _formatTime(message.timestamp),
+              style: AppTextStyles.caption.copyWith(
+                color: isMe
+                    ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.8)
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
       ),
@@ -219,6 +264,6 @@ class _MessageBubble extends StatelessWidget {
   }
 
   String _formatTime(DateTime dt) {
-    return '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 }

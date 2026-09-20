@@ -18,13 +18,14 @@ class BottomNavBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Real unread notifications count (0 hides the badge).
     final unread = ref.watch(unreadNotificationsCountProvider);
+    final colors = Theme.of(context).colorScheme;
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: colors.surface,
         boxShadow: [
           BoxShadow(
-            color: AppColors.textPrimary.withValues(alpha: 0.06),
+            color: colors.shadow.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -89,6 +90,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -104,7 +106,7 @@ class _NavItem extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: isActive
-                  ? AppColors.primary
+                  ? colors.primary
                   : Colors.transparent,
               borderRadius: AppRadius.fullAll,
             ),
@@ -113,7 +115,9 @@ class _NavItem extends StatelessWidget {
               children: [
                 Icon(
                   icon,
-                  color: isActive ? AppColors.white : AppColors.textHint,
+                  color: isActive
+                      ? colors.onPrimary
+                      : colors.onSurfaceVariant,
                   size: 24,
                 ),
                 if (badge != null)
@@ -126,15 +130,15 @@ class _NavItem extends StatelessWidget {
                         color: AppColors.accent,
                         shape: BoxShape.circle,
                       ),
-                      child: Text(
-                        '$badge',
-                        style: const TextStyle(
-                          color: AppColors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          height: 1,
-                        ),
+                    child: Text(
+                      '$badge',
+                      style: TextStyle(
+                        color: colors.onPrimary,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        height: 1,
                       ),
+                    ),
                     ),
                   ),
               ],
@@ -146,7 +150,9 @@ class _NavItem extends StatelessWidget {
           Text(
             label,
             style: AppTextStyles.caption.copyWith(
-              color: isActive ? AppColors.primary : AppColors.textHint,
+              color: isActive
+                  ? colors.primary
+                  : colors.onSurfaceVariant,
               fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
               fontSize: 10,
             ),

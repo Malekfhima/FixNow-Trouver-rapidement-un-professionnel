@@ -19,15 +19,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
   late TabController _tabController;
   final _searchController = TextEditingController();
 
+  // Noms identiques à ceux enregistrés dans Firestore (pro.categories) —
+  // garantit que le filtre `arrayContains` fonctionne.
   final _categories = [
     'Tous',
     'Plomberie',
-    'Électricien',
+    'Électricité',
     'Menuiserie',
     'Peinture',
     'Maçonnerie',
     'Soudure',
+    'Couverture',
     'Ménage',
+    'Serrurerie',
+    'Mécanique',
   ];
 
   @override
@@ -67,12 +72,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
     final searchState = ref.watch(searchControllerProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Rechercher'),
         elevation: 0,
         backgroundColor: Colors.transparent,
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
@@ -102,12 +107,86 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
             ),
           ),
 
+          // Filters bar: sort + min rating + max price
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            child: Row(
+              children: [
+                // Sort selector
+                Expanded(
+                  child: DropdownButtonFormField<SearchSort>(
+                    initialValue: searchState.sort,
+                    decoration: const InputDecoration(
+                      labelText: 'Trier par',
+                      prefixIcon: Icon(Icons.sort_rounded),
+                      isDense: true,
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                          value: SearchSort.rating, child: Text('Meilleures notes')),
+                      DropdownMenuItem(
+                          value: SearchSort.priceAsc, child: Text('Prix croissant')),
+                      DropdownMenuItem(
+                          value: SearchSort.priceDesc, child: Text('Prix décroissant')),
+                    ],
+                    onChanged: (v) => ref
+                        .read(searchControllerProvider.notifier)
+                        .applyFilters(sort: v),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                // Min rating
+                Expanded(
+                  child: DropdownButtonFormField<double>(
+                    initialValue: searchState.minRating,
+                    decoration: const InputDecoration(
+                      labelText: 'Note min.',
+                      prefixIcon: Icon(Icons.star_rounded),
+                      isDense: true,
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 0.0, child: Text('Toutes')),
+                      DropdownMenuItem(value: 3.0, child: Text('3+ ★')),
+                      DropdownMenuItem(value: 4.0, child: Text('4+ ★')),
+                      DropdownMenuItem(value: 4.5, child: Text('4.5+ ★')),
+                    ],
+                    onChanged: (v) => ref
+                        .read(searchControllerProvider.notifier)
+                        .applyFilters(minRating: v ?? 0),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                // Max price
+                Expanded(
+                  child: DropdownButtonFormField<double>(
+                    initialValue: searchState.maxPrice,
+                    decoration: const InputDecoration(
+                      labelText: 'Prix max',
+                      prefixIcon: Icon(Icons.euro_rounded),
+                      isDense: true,
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: null, child: Text('Tous')),
+                      DropdownMenuItem(value: 30, child: Text('≤ 30 €')),
+                      DropdownMenuItem(value: 50, child: Text('≤ 50 €')),
+                      DropdownMenuItem(value: 75, child: Text('≤ 75 €')),
+                    ],
+                    onChanged: (v) => ref
+                        .read(searchControllerProvider.notifier)
+                        .applyFilters(maxPrice: v),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+
           // Category tabs
           TabBar(
             controller: _tabController,
             isScrollable: true,
             labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textSecondary,
+            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
             indicatorColor: AppColors.primary,
             labelStyle: AppTextStyles.buttonMedium,
             unselectedLabelStyle: AppTextStyles.buttonMedium,
@@ -122,7 +201,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
             child: searchState.isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : searchState.error != null
-                    ? Center(child: Text('Erreur: ${searchState.error}'))
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(searchState.error ?? 'Erreur'),
+                            const SizedBox(height: AppSpacing.md),
+                            OutlinedButton.icon(
+                              onPressed: () => ref
+                                  .read(searchControllerProvider.notifier)
+                                  .search(
+                                    query: searchState.query,
+                                    category: searchState.selectedCategory,
+                                  ),
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Réessayer'),
+                            ),
+                          ],
+                        ),
+                      )
                     : searchState.results.isEmpty
                         ? _buildEmptyState()
                         : ListView.separated(
@@ -158,13 +255,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.search_off_rounded, size: 64, color: AppColors.textHint),
+          Icon(Icons.search_off_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(height: AppSpacing.lg),
           Text(
             'Aucun professionnel trouvé',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyLarge.copyWith(
-              color: AppColors.textSecondary,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -206,11 +303,21 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
 
   Color _categoryColor(Professional pro) {
     if (pro.categories.isEmpty) return AppColors.primary;
-    return _categoryColors[pro.categories.first] ?? AppColors.primary;
+    final base = _categoryColors[pro.categories.first] ?? AppColors.primary;
+    // En sombre : éclaircir l'icône pour garder le contraste.
+    if (Theme.of(context).brightness == Brightness.dark) {
+      return Color.lerp(base, Colors.white, 0.35)!;
+    }
+    return base;
   }
 
   Color _categoryBgColor(Professional pro) {
-    if (pro.categories.isEmpty) return AppColors.primaryContainer;
-    return _categoryBgColors[pro.categories.first] ?? AppColors.primaryContainer;
+    if (pro.categories.isEmpty) return Theme.of(context).colorScheme.primaryContainer;
+    final base = _categoryBgColors[pro.categories.first] ?? Theme.of(context).colorScheme.primaryContainer;
+    // En sombre : assombrir le pastel pour éviter l'éblouissement.
+    if (Theme.of(context).brightness == Brightness.dark) {
+      return Color.lerp(base, Colors.black, 0.65)!;
+    }
+    return base;
   }
 }

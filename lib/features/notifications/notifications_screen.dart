@@ -6,6 +6,16 @@ import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/features/notifications/notifications_controller.dart';
 import 'package:fixnow/models/notification_model.dart';
 
+/// Locale init (once per app run — not in build).
+bool _timeagoLocaleRegistered = false;
+
+void _ensureTimeagoLocale() {
+  if (!_timeagoLocaleRegistered) {
+    timeago.setLocaleMessages('fr', timeago.FrMessages());
+    _timeagoLocaleRegistered = true;
+  }
+}
+
 /// In-app notifications screen.
 class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
@@ -13,16 +23,15 @@ class NotificationsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(notificationsProvider);
-
-    timeago.setLocaleMessages('fr', timeago.FrMessages());
+    _ensureTimeagoLocale();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Notifications'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
         actions: [
           TextButton(
             onPressed: () =>
@@ -38,11 +47,11 @@ class NotificationsScreen extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.notifications_off_outlined,
-                        size: 64, color: AppColors.textHint),
+                        size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     const SizedBox(height: AppSpacing.lg),
                     Text('Aucune notification',
                         style: AppTextStyles.h4
-                            .copyWith(color: AppColors.textSecondary)),
+                            .copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   ],
                 ),
               )
@@ -71,13 +80,13 @@ class _NotificationTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final (icon, color) = _iconFor(item.type);
+    final (icon, color) = _iconFor(context, item.type);
 
     return Container(
       decoration: BoxDecoration(
-        color: item.read ? AppColors.white : AppColors.primaryContainer.withValues(alpha: 0.35),
+        color: item.read ? Theme.of(context).colorScheme.surface : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.35),
         borderRadius: AppRadius.mdAll,
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: ListTile(
         leading: CircleAvatar(
@@ -97,7 +106,7 @@ class _NotificationTile extends ConsumerWidget {
             const SizedBox(height: 2),
             Text(
               timeago.format(item.createdAt, locale: 'fr'),
-              style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+              style: AppTextStyles.caption.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -141,7 +150,7 @@ class _NotificationTile extends ConsumerWidget {
     }
   }
 
-  (IconData, Color) _iconFor(NotificationType type) {
+  (IconData, Color) _iconFor(BuildContext context, NotificationType type) {
     switch (type) {
       case NotificationType.newMessage:
         return (Icons.chat_bubble_outline_rounded, AppColors.primary);
@@ -154,13 +163,13 @@ class _NotificationTile extends ConsumerWidget {
       case NotificationType.requestCompleted:
         return (Icons.task_alt_rounded, AppColors.success);
       case NotificationType.requestCancelled:
-        return (Icons.event_busy_outlined, AppColors.textSecondary);
+        return (Icons.event_busy_outlined, Theme.of(context).colorScheme.onSurfaceVariant);
       case NotificationType.proApproved:
         return (Icons.verified_outlined, AppColors.success);
       case NotificationType.proRejected:
         return (Icons.warning_amber_outlined, AppColors.error);
       case NotificationType.generic:
-        return (Icons.notifications_none_rounded, AppColors.textSecondary);
+        return (Icons.notifications_none_rounded, Theme.of(context).colorScheme.onSurfaceVariant);
     }
   }
 }

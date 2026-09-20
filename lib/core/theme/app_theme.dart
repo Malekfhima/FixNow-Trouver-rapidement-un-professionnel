@@ -56,8 +56,14 @@ class AppColors {
   static const Color serrurerieLight = Color(0xFFE0E7FF);
   static const Color mecaniqueLight = Color(0xFFFEE2E2);
 
-  // ── Dark mode placeholders ───────────────────────────────────────
-  // TODO: implement dark mode tokens when needed
+  // ── Dark mode tokens (used by ThemeData dark) ────────────────────
+  static const Color darkBackground = Color(0xFF12141B);
+  static const Color darkSurface = Color(0xFF1B1E28);
+  static const Color darkBorder = Color(0xFF2A2E3C);
+  static const Color darkTextPrimary = Color(0xFFF2F4F9);
+  static const Color darkTextSecondary = Color(0xFF9CA3B5);
+  static const Color darkTextHint = Color(0xFF6B7285);
+  static const Color darkPrimaryContainer = Color(0xFF23324F);
 }
 
 /// Spacing tokens — multiples of 4px for consistency.
@@ -246,6 +252,7 @@ class AppTheme {
           error: AppColors.error,
           onError: AppColors.white,
         ),
+        extensions: const [SemanticColors.light],
         appBarTheme: const AppBarTheme(
           backgroundColor: AppColors.background,
           foregroundColor: AppColors.textPrimary,
@@ -333,6 +340,185 @@ class AppTheme {
         ),
       );
 
-  // TODO: Dark theme
-  // static ThemeData get dark => ThemeData( ... );
+  // Dark theme — same structure/tokens as light, dark palette.
+  static ThemeData get dark => ThemeData(
+        useMaterial3: true,
+        fontFamily: AppTextStyles._fontFamily,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: AppColors.darkBackground,
+        colorScheme: const ColorScheme.dark(
+          primary: AppColors.primaryLight,
+          onPrimary: AppColors.white,
+          secondary: AppColors.accentLight,
+          onSecondary: AppColors.white,
+          surface: AppColors.darkSurface,
+          onSurface: AppColors.darkTextPrimary,
+          error: AppColors.error,
+          onError: AppColors.white,
+          primaryContainer: AppColors.darkPrimaryContainer,
+          onPrimaryContainer: AppColors.darkTextPrimary,
+        ),
+        extensions: const [SemanticColors.dark],
+        appBarTheme: const AppBarTheme(
+          backgroundColor: AppColors.darkBackground,
+          foregroundColor: AppColors.darkTextPrimary,
+          elevation: 0,
+          scrolledUnderElevation: 1,
+          centerTitle: false,
+          titleTextStyle: TextStyle(
+            fontFamily: AppTextStyles._fontFamily,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: AppColors.darkTextPrimary,
+            height: 1.3,
+          ),
+        ),
+        cardTheme: CardThemeData(
+          color: AppColors.darkSurface,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: AppRadius.lgAll,
+            side: const BorderSide(color: AppColors.darkBorder, width: 1),
+          ),
+          margin: EdgeInsets.zero,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: AppColors.white,
+            textStyle: AppTextStyles.buttonLarge,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.lg,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.lgAll,
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.primaryLight,
+            backgroundColor: Colors.transparent,
+            textStyle: AppTextStyles.buttonLarge,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.lg,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.lgAll,
+            ),
+            side: const BorderSide(color: AppColors.primaryLight, width: 1.5),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: AppColors.darkSurface,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.md,
+          ),
+          hintStyle: AppTextStyles.bodyMedium.copyWith(
+            color: AppColors.darkTextHint,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: AppRadius.lgAll,
+            borderSide: const BorderSide(color: AppColors.darkBorder),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: AppRadius.lgAll,
+            borderSide: const BorderSide(color: AppColors.darkBorder),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: AppRadius.lgAll,
+            borderSide:
+                const BorderSide(color: AppColors.primaryLight, width: 1.5),
+          ),
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: AppColors.darkSurface,
+          indicatorColor: AppColors.primaryLight.withValues(alpha: 0.15),
+          elevation: 0,
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return AppTextStyles.caption.copyWith(
+                color: AppColors.primaryLight,
+                fontWeight: FontWeight.w600,
+              );
+            }
+            return AppTextStyles.caption;
+          }),
+        ),
+      );
+}
+
+/// Semantic colors that adapt to brightness (success, warning, info…).
+/// Access via `context.semanticColors.success`.
+class SemanticColors extends ThemeExtension<SemanticColors> {
+  final Color success;
+  final Color warning;
+  final Color info;
+  final Color accent;
+  final Color neutral;
+
+  const SemanticColors({
+    required this.success,
+    required this.warning,
+    required this.info,
+    required this.accent,
+    required this.neutral,
+  });
+
+  static const light = SemanticColors(
+    success: Color(0xFF16A34A),
+    warning: Color(0xFFD97706),
+    info: Color(0xFF2563EB),
+    accent: Color(0xFFE85A2F),
+    neutral: Color(0xFF6B7280),
+  );
+
+  static const dark = SemanticColors(
+    success: Color(0xFF4ADE80),
+    warning: Color(0xFFFBBF24),
+    info: Color(0xFF60A5FA),
+    accent: Color(0xFFFF9466),
+    neutral: Color(0xFF9CA3B5),
+  );
+
+  @override
+  SemanticColors copyWith({
+    Color? success,
+    Color? warning,
+    Color? info,
+    Color? accent,
+    Color? neutral,
+  }) {
+    return SemanticColors(
+      success: success ?? this.success,
+      warning: warning ?? this.warning,
+      info: info ?? this.info,
+      accent: accent ?? this.accent,
+      neutral: neutral ?? this.neutral,
+    );
+  }
+
+  @override
+  SemanticColors lerp(SemanticColors? other, double t) {
+    if (other == null) return this;
+    return SemanticColors(
+      success: Color.lerp(success, other.success, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
+      info: Color.lerp(info, other.info, t)!,
+      accent: Color.lerp(accent, other.accent, t)!,
+      neutral: Color.lerp(neutral, other.neutral, t)!,
+    );
+  }
+}
+
+/// Extension on BuildContext for semantic colors.
+extension SemanticColorsX on BuildContext {
+  SemanticColors get semanticColors =>
+      Theme.of(this).extension<SemanticColors>() ?? SemanticColors.light;
 }

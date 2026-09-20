@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/widgets/outline_button.dart';
 import 'package:fixnow/core/utils/validators.dart';
@@ -38,9 +40,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         context.go('/');
       } else if (mounted) {
         final error = ref.read(authControllerProvider).error;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error ?? 'Échec de la connexion')),
-        );
+        AppAlerts.error(context, error ?? 'Échec de la connexion');
       }
     }
   }
@@ -51,9 +51,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       context.go('/');
     } else if (mounted) {
       final error = ref.read(authControllerProvider).error;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error ?? 'Échec de la connexion Google')),
-      );
+      AppAlerts.error(context, error ?? 'Échec de la connexion Google');
     }
   }
 
@@ -62,7 +60,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final authState = ref.watch(authControllerProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -72,12 +70,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: AppSpacing.xxxxxl),
-                Text('Bienvenue\nsur FixNow', style: AppTextStyles.h1),
+                const Text('Bienvenue\nsur FixNow', style: AppTextStyles.h1),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   'Connectez-vous pour trouver le bon professionnel',
                   style: AppTextStyles.bodyLarge.copyWith(
-                    color: AppColors.textSecondary,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xxxxl),
@@ -122,12 +120,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: AppSpacing.xl),
                 Row(
                   children: [
-                    const Expanded(child: Divider(color: AppColors.border)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    Expanded(child: Divider(color: Theme.of(context).colorScheme.outlineVariant)),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                       child: Text('ou', style: AppTextStyles.bodySmall),
                     ),
-                    const Expanded(child: Divider(color: AppColors.border)),
+                    Expanded(child: Divider(color: Theme.of(context).colorScheme.outlineVariant)),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.xl),
@@ -135,23 +133,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   label: 'Continuer avec Google',
                   onPressed: authState.isLoading ? null : _loginWithGoogle,
                   isExpanded: true,
-                  icon: const Icon(Icons.g_mobiledata, size: 22),
-                  backgroundColor: AppColors.white,
-                  foregroundColor: AppColors.textPrimary,
+                  icon: SvgPicture.asset(
+                    'assets/icons/google.svg',
+                    width: 20,
+                    height: 20,
+                  ),
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 OutlineButton(
                   label: 'Continuer avec téléphone',
                   onPressed: authState.isLoading ? null : () => context.push('/phone-auth'),
                   isExpanded: true,
-                  borderColor: AppColors.border,
-                  foregroundColor: AppColors.textPrimary,
+                  borderColor: Theme.of(context).colorScheme.outlineVariant,
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
                 ),
                 const SizedBox(height: AppSpacing.xxxxxl),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
+                    const Text(
                       'Pas encore de compte ? ',
                       style: AppTextStyles.bodyMedium,
                     ),

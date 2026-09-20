@@ -15,7 +15,7 @@ class AdminScreen extends ConsumerStatefulWidget {
 
 class _AdminScreenState extends ConsumerState<AdminScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 3, vsync: this);
+  late final TabController _tabs = TabController(length: 4, vsync: this);
 
   @override
   void dispose() {
@@ -29,21 +29,22 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
     final stats = ref.read(adminControllerProvider.notifier).stats;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Administration'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
         bottom: TabBar(
           controller: _tabs,
           labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
+          unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
           indicatorColor: AppColors.primary,
           tabs: const [
             Tab(text: 'Validation'),
             Tab(text: 'Pros'),
             Tab(text: 'Catégories'),
+            Tab(text: 'Signalements'),
           ],
         ),
       ),
@@ -67,6 +68,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                     _ValidationTab(state: state),
                     _ProsTab(state: state),
                     _CategoriesTab(state: state),
+                    const _ReportsTab(),
                   ],
                 ),
       floatingActionButton: stats == null
@@ -95,10 +97,10 @@ class _ValidationTab extends ConsumerWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.verified_outlined, size: 64, color: AppColors.success),
+            const Icon(Icons.verified_outlined, size: 64, color: AppColors.success),
             const SizedBox(height: AppSpacing.lg),
             Text('Aucun pro en attente',
-                style: AppTextStyles.h4.copyWith(color: AppColors.textSecondary)),
+                style: AppTextStyles.h4.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
         ),
       );
@@ -157,7 +159,7 @@ class _ProsTab extends StatelessWidget {
         final pro = pros[index];
         return ListTile(
           leading: CircleAvatar(
-            backgroundColor: AppColors.primaryContainer,
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
             backgroundImage: pro.avatarUrl != null
                 ? NetworkImage(pro.avatarUrl!)
                 : null,
@@ -252,7 +254,7 @@ class _CategoriesTab extends ConsumerWidget {
                       .deleteCategory(category),
                 ),
                 shape: RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
-                tileColor: AppColors.white,
+                tileColor: Theme.of(context).colorScheme.surface,
               );
             },
           ),
@@ -293,6 +295,105 @@ class _CategoriesTab extends ConsumerWidget {
   }
 }
 
+// ── Reports tab ─────────────────────────────────────────────────────────
+
+class _ReportsTab extends ConsumerWidget {
+  const _ReportsTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reportsAsync = ref.watch(_openReportsProvider);
+
+    return reportsAsync.when(
+      data: (reports) => reports.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.verified_user_outlined,
+                      size: 64, color: AppColors.success),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text('Aucun signalement en attente',
+                      style: AppTextStyles.h4
+                          .copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                ],
+              ),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              itemCount: reports.length,
+              separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+              itemBuilder: (context, index) {
+                final report = reports[index];
+                return Container(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: AppRadius.lgAll,
+                    border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                    boxShadow: AppShadows.sm,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.flag_rounded,
+                              color: AppColors.error, size: 18),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              '${report['targetType'] ?? 'contenu'} · ${report['reason'] ?? 'non précisé'}',
+                              style: AppTextStyles.bodyMedium
+                                  .copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'Cible : ${report['targetId'] ?? '?'}',
+                        style: AppTextStyles.caption,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => ref
+                                  .read(adminControllerProvider.notifier)
+                                  .resolveReport(report['id'] as String,
+                                      valid: false),
+                              child: const Text('Rejeter'),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: PrimaryButton(
+                              label: 'Modérer',
+                              onPressed: () => ref
+                                  .read(adminControllerProvider.notifier)
+                                  .resolveReport(report['id'] as String,
+                                      valid: true),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Erreur : $e')),
+    );
+  }
+}
+
+final _openReportsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  return ref.watch(adminControllerProvider.notifier).openReportsStream();
+});
+
 // ── Shared pro card ─────────────────────────────────────────────────────
 
 class _ProCard extends StatelessWidget {
@@ -305,9 +406,9 @@ class _ProCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: AppRadius.lgAll,
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         boxShadow: AppShadows.sm,
       ),
       child: Column(
@@ -316,7 +417,7 @@ class _ProCard extends StatelessWidget {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: AppColors.primaryContainer,
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                 backgroundImage:
                     pro.avatarUrl != null ? NetworkImage(pro.avatarUrl!) : null,
                 child: pro.avatarUrl == null
@@ -334,7 +435,7 @@ class _ProCard extends StatelessWidget {
                     Text(
                       '${pro.city} · ${pro.categories.join(', ')} · ${pro.hourlyRate.toInt()} €/h',
                       style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textSecondary),
+                          .copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),

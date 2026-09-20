@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_alerts.dart';
+import 'package:fixnow/models/service_request_state_machine.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/widgets/outline_button.dart';
 import 'package:fixnow/features/pro_dashboard/pro_requests_controller.dart';
@@ -19,17 +21,17 @@ class ProRequestsScreen extends ConsumerWidget {
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         appBar: AppBar(
           title: const Text('Mes demandes'),
           backgroundColor: Colors.transparent,
           elevation: 0,
-          foregroundColor: AppColors.textPrimary,
-          bottom: const TabBar(
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
+          bottom: TabBar(
             labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textSecondary,
+            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
             indicatorColor: AppColors.primary,
-            tabs: [
+            tabs: const [
               Tab(text: 'Nouvelles'),
               Tab(text: 'En cours'),
               Tab(text: 'Historique'),
@@ -91,9 +93,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur : $error')),
-      );
+      AppAlerts.error(context, error);
     }
   }
 
@@ -157,11 +157,19 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
 
     if (quoted != true || !mounted) return;
 
-    final price =
-        double.parse(priceController.text.replaceAll(',', '.'));
+    // Validation robuste : nombre positif (l'ancien code crashait sur
+    // une entrée non numérique).
+    final price = double.tryParse(
+        priceController.text.replaceAll(',', '.'));
+    if (price == null || price <= 0) {
+      if (mounted) {
+        AppAlerts.warning(context, 'Entrez un prix valide (nombre positif)');
+      }
+      return;
+    }
     await _run(
       () => ref.read(proRequestsControllerProvider.notifier).sendQuote(
-            requestId: widget.request.id,
+            request: widget.request,
             price: price,
             note: noteController.text.trim(),
           ),
@@ -175,9 +183,9 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: AppRadius.lgAll,
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         boxShadow: AppShadows.sm,
       ),
       child: Column(
@@ -196,7 +204,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                       : () => _run(
                             () => ref
                                 .read(proRequestsControllerProvider.notifier)
-                                .declineRequest(request.id),
+                                .declineRequest(request),
                           ),
                 ),
               ),
@@ -219,7 +227,7 @@ class _PendingCardState extends ConsumerState<_PendingCard> {
                       : () => _run(
                             () => ref
                                 .read(proRequestsControllerProvider.notifier)
-                                .acceptRequest(request.id),
+                                .acceptRequest(request),
                           ),
                 ),
               ),
@@ -250,9 +258,9 @@ class _ActiveTab extends ConsumerWidget {
         return Container(
           padding: const EdgeInsets.all(AppSpacing.lg),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: AppRadius.lgAll,
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
             boxShadow: AppShadows.sm,
           ),
           child: Column(
@@ -273,15 +281,16 @@ class _ActiveTab extends ConsumerWidget {
               const SizedBox(height: AppSpacing.md),
               _ActionRow(
                 children: [
-                  if (request.status == ServiceRequestStatus.accepted ||
-                      request.status == ServiceRequestStatus.quoted)
+                  // State machine : uniquement les actions valides du pro
+                  if (request.canTransitionTo(
+                      ServiceRequestStatus.inProgress, ActorRole.pro))
                     Expanded(
                       child: PrimaryButton(
                         label: 'Démarrer',
                         isExpanded: true,
                         onPressed: () => ref
                             .read(proRequestsControllerProvider.notifier)
-                            .startWork(request.id),
+                            .startWork(request),
                       ),
                     ),
                   if (request.status == ServiceRequestStatus.inProgress) ...[
@@ -299,7 +308,7 @@ class _ActiveTab extends ConsumerWidget {
                         isExpanded: true,
                         onPressed: () => ref
                             .read(proRequestsControllerProvider.notifier)
-                            .completeWork(request.id),
+                            .completeWork(request),
                       ),
                     ),
                   ],
@@ -332,9 +341,9 @@ class _HistoryList extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(AppSpacing.lg),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: AppRadius.lgAll,
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -385,7 +394,7 @@ class _RequestHeader extends StatelessWidget {
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.sm, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.primaryContainer,
+                color: Theme.of(context).colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Text(
@@ -414,8 +423,8 @@ class _RequestHeader extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         Row(
           children: [
-            const Icon(Icons.location_on_outlined,
-                size: 14, color: AppColors.textSecondary),
+            Icon(Icons.location_on_outlined,
+                size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(width: 4),
             Expanded(
               child: Text(
@@ -427,8 +436,8 @@ class _RequestHeader extends StatelessWidget {
             ),
             if (request.scheduledDate != null) ...[
               const SizedBox(width: AppSpacing.sm),
-              const Icon(Icons.calendar_today_outlined,
-                  size: 14, color: AppColors.textSecondary),
+              Icon(Icons.calendar_today_outlined,
+                  size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
               const SizedBox(width: 2),
               Text(
                 DateFormat('dd/MM').format(request.scheduledDate!),
@@ -461,14 +470,14 @@ class _EmptyView extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.inbox_outlined, size: 64, color: AppColors.textHint),
+          Icon(Icons.inbox_outlined, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(height: AppSpacing.lg),
           Text(
             'Aucune demande ici',
-            style: AppTextStyles.h4.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.h4.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(
+          const Text(
             'Les nouvelles demandes apparaîtront dans cet onglet',
             style: AppTextStyles.bodySmall,
             textAlign: TextAlign.center,

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/features/booking/booking_controller.dart';
 import 'package:fixnow/features/professional_profile/pro_profile_controller.dart';
 import 'package:fixnow/models/service_request_model.dart';
+import 'package:fixnow/models/service_request_state_machine.dart';
 import 'package:intl/intl.dart';
 
 /// Orders / service requests screen.
@@ -17,16 +19,16 @@ class OrdersScreen extends ConsumerWidget {
     final requestsAsync = ref.watch(clientRequestsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Mes commandes'),
         elevation: 0,
         backgroundColor: Colors.transparent,
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
       ),
       body: requestsAsync.when(
         data: (requests) => requests.isEmpty
-            ? _buildEmptyState()
+            ? _buildEmptyState(context)
             : RefreshIndicator(
                 onRefresh: () async => ref.invalidate(clientRequestsProvider),
                 child: ListView.separated(
@@ -45,19 +47,19 @@ class OrdersScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.textHint),
+          Icon(Icons.receipt_long_outlined, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(height: AppSpacing.lg),
           Text(
             'Aucune commande',
-            style: AppTextStyles.h4.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.h4.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(
+          const Text(
             'Vos demandes de service\napparaîtront ici',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodySmall,
@@ -85,9 +87,7 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error)),
-      );
+      AppAlerts.error(context, error);
     }
   }
 
@@ -117,7 +117,7 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
     if (ok == true) {
       await _run(() => ref
           .read(bookingControllerProvider.notifier)
-          .cancelRequest(widget.request.id));
+          .cancelRequest(widget.request));
     }
   }
 
@@ -125,8 +125,8 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
   Widget build(BuildContext context) {
     final request = widget.request;
     final statusColor = _getStatusColor(request.status);
-    final canCancel = request.status == ServiceRequestStatus.pending ||
-        request.status == ServiceRequestStatus.quoted;
+    final canCancel = request.canBeCancelledByClient;
+    final canAcceptQuote = request.canClientAcceptQuote;
     final hasQuote = request.quotePrice != null &&
         (request.status == ServiceRequestStatus.quoted ||
             request.status == ServiceRequestStatus.accepted ||
@@ -135,9 +135,9 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: AppRadius.lgAll,
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         boxShadow: AppShadows.sm,
       ),
       child: Column(
@@ -182,8 +182,8 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
           if (request.proId != null)
             Row(
               children: [
-                const Icon(Icons.engineering_outlined,
-                    size: 14, color: AppColors.textSecondary),
+                Icon(Icons.engineering_outlined,
+                    size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
@@ -197,8 +197,8 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
             ),
           Row(
             children: [
-              const Icon(Icons.location_on_outlined,
-                  size: 14, color: AppColors.textSecondary),
+              Icon(Icons.location_on_outlined,
+                  size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
@@ -218,7 +218,7 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
               width: double.infinity,
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
-                color: AppColors.primaryContainer.withValues(alpha: 0.4),
+                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
                 borderRadius: AppRadius.mdAll,
               ),
               child: Column(
@@ -236,7 +236,7 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
                     Text(
                       request.quoteNote!,
                       style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.textSecondary),
+                          .copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ],
@@ -265,13 +265,27 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
             ),
           ],
 
-          // Actions
-          if ((canCancel && !_busy) || request.status == ServiceRequestStatus.completed)
+          // Actions — driven by the state machine (status + role)
+          if (canAcceptQuote || canCancel || request.canBeReviewed)
             ...[
             const SizedBox(height: AppSpacing.md),
             Row(
               children: [
-                if (request.status == ServiceRequestStatus.completed)
+                if (canAcceptQuote) ...[
+                  Expanded(
+                    child: PrimaryButton(
+                      label: 'Accepter le devis',
+                      isExpanded: true,
+                      onPressed: _busy
+                          ? null
+                          : () => _run(() => ref
+                              .read(bookingControllerProvider.notifier)
+                              .acceptQuote(widget.request)),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                ],
+                if (request.canBeReviewed)
                   Expanded(
                     child: PrimaryButton(
                       label: 'Noter le pro',
@@ -281,10 +295,10 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
                       ),
                     ),
                   ),
-                if (canCancel) ...[
+                if (canCancel)
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _confirmCancel,
+                      onPressed: _busy ? null : _confirmCancel,
                       icon: const Icon(Icons.close_rounded,
                           size: 18, color: AppColors.error),
                       label: const Text(
@@ -298,7 +312,6 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
                       ),
                     ),
                   ),
-                ],
               ],
             ),
           ],
@@ -313,9 +326,9 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
       case ServiceRequestStatus.accepted: return AppColors.primary;
       case ServiceRequestStatus.declined: return AppColors.error;
       case ServiceRequestStatus.quoted: return AppColors.accent;
-      case ServiceRequestStatus.inProgress: return Colors.blue;
+      case ServiceRequestStatus.inProgress: return AppColors.info;
       case ServiceRequestStatus.completed: return AppColors.success;
-      case ServiceRequestStatus.cancelled: return AppColors.textSecondary;
+      case ServiceRequestStatus.cancelled: return Theme.of(context).colorScheme.onSurfaceVariant;
     }
   }
 

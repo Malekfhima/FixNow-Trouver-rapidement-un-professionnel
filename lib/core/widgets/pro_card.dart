@@ -30,18 +30,18 @@ class ProCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: colors.surface,
         borderRadius: AppRadius.lgAll,
-        border: Border.all(color: AppColors.border, width: 1),
-        boxShadow: AppShadows.sm,
+        border: Border.all(color: colors.outlineVariant, width: 1),
       ),
       child: Row(
         children: [
           // Avatar
-          _buildAvatar(),
+          _buildAvatar(context),
           const SizedBox(width: AppSpacing.md),
 
           // Info
@@ -77,7 +77,7 @@ class ProCard extends StatelessWidget {
                       rating.toStringAsFixed(1),
                       style: AppTextStyles.bodySmall.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: colors.onSurface,
                       ),
                     ),
                     Text(
@@ -90,7 +90,7 @@ class ProCard extends StatelessWidget {
 
                 Text(
                   name,
-                  style: AppTextStyles.h4,
+                  style: AppTextStyles.h4.copyWith(color: colors.onSurface),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -142,7 +142,7 @@ class ProCard extends StatelessWidget {
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   elevation: 0,
                   textStyle: AppTextStyles.buttonSmall,
                   shape: RoundedRectangleBorder(
@@ -158,14 +158,15 @@ class ProCard extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatar() {
+  Widget _buildAvatar(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return CircleAvatar(
       radius: 30,
-      backgroundColor: AppColors.primaryContainer,
+      backgroundColor: cs.primaryContainer,
       backgroundImage:
           imageUrl != null ? NetworkImage(imageUrl!) : null,
       child: imageUrl == null
-          ? const Icon(Icons.person, color: AppColors.primary, size: 30)
+          ? Icon(Icons.person, color: cs.onPrimaryContainer, size: 30)
           : null,
     );
   }

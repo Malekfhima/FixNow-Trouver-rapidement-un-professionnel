@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/utils/validators.dart';
 import 'package:fixnow/features/professional_profile/pro_profile_controller.dart';
@@ -60,17 +61,13 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     setState(() => _submitting = false);
 
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error)),
-      );
+      AppAlerts.error(context, error);
       return;
     }
 
     // Refresh the pro profile (rating visible right away).
     ref.invalidate(proProfileControllerProvider(proId));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Merci pour votre avis !')),
-    );
+    AppAlerts.success(context, 'Merci pour votre avis !');
     context.pop();
   }
 
@@ -90,12 +87,12 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
         ref.watch(proByIdProvider(proId)).valueOrNull;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Noter le professionnel'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.xl),
@@ -107,7 +104,7 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
               children: [
                 CircleAvatar(
                   radius: 26,
-                  backgroundColor: AppColors.primaryContainer,
+                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                   backgroundImage: pro?.avatarUrl != null
                       ? NetworkImage(pro!.avatarUrl!)
                       : null,
@@ -128,12 +125,12 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
             ),
             const SizedBox(height: AppSpacing.xl),
 
-            Text('Votre prestation est terminée 🎉', style: AppTextStyles.h3),
+            const Text('Votre prestation est terminée 🎉', style: AppTextStyles.h3),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'Votre note aide les autres clients à choisir le bon professionnel.',
               style: AppTextStyles.bodyMedium
-                  .copyWith(color: AppColors.textSecondary),
+                  .copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: AppSpacing.xxl),
 

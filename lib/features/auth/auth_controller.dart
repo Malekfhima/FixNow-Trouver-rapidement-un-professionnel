@@ -104,9 +104,12 @@ class AuthController extends StateNotifier<AuthState> {
         return false;
       }
       if (!profile.isPro) {
+        // An admin keeps their 'admin' role — only the isPro flag is added.
+        // (Previously an admin using "Devenir professionnel" was downgraded
+        // to role 'pro', silently losing their privileges.)
         await _firestoreService.updateUser(user.uid, {
           'isPro': true,
-          'role': UserRole.pro.name,
+          if (profile.role != UserRole.admin) 'role': UserRole.pro.name,
         });
       }
 

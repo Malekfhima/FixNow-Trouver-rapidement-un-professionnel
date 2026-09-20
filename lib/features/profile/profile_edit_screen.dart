@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/utils/validators.dart';
 import 'package:fixnow/features/home/home_controller.dart';
@@ -53,13 +54,11 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
       imageQuality: 80,
     );
     if (picked == null) return;
+    if (!mounted) return;
     if (kIsWeb) {
       // On web, ImagePicker gives bytes — keep the URL path only for IO.
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text(
-                'Upload d\u2019avatar non supporté sur le web pour le moment')),
-      );
+      AppAlerts.warning(
+          context, 'Upload d\u2019avatar non supporté sur le web pour le moment');
       return;
     }
     setState(() => _newAvatarFile = File(picked.path));
@@ -98,15 +97,11 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
           .updateDisplayName(_nameController.text.trim());
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profil mis à jour ✓')),
-      );
+      AppAlerts.success(context, 'Profil mis à jour');
       context.pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur : $e')),
-      );
+      AppAlerts.fromError(context, e);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -117,12 +112,12 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     final user = ref.watch(userProfileProvider).valueOrNull;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Modifier le profil'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.xl),
@@ -137,7 +132,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                   children: [
                     CircleAvatar(
                       radius: 48,
-                      backgroundColor: AppColors.primaryContainer,
+                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                       backgroundImage: _newAvatarFile != null
                           ? FileImage(_newAvatarFile!) as ImageProvider<Object>
                           : (_avatarUrl ?? user?.avatarUrl) != null
@@ -159,8 +154,8 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                           color: AppColors.primary,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.camera_alt_rounded,
-                            color: AppColors.white, size: 16),
+                        child: Icon(Icons.camera_alt_rounded,
+                            color: Theme.of(context).colorScheme.onPrimary, size: 16),
                       ),
                     ),
                   ],

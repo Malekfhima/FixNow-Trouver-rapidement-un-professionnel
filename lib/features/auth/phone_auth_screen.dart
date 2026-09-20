@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/features/auth/auth_controller.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
@@ -49,9 +49,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                   _verifyInProgress = false;
                 });
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(error.toString())),
-                  );
+                  AppAlerts.fromError(context, error);
                 }
               },
               onCodeSent: (verificationId, resendToken) {
@@ -74,9 +72,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
           _verifyInProgress = false;
         });
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.toString())),
-          );
+          AppAlerts.fromError(context, e);
         }
       }
     }
@@ -84,16 +80,12 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
 
   Future<void> _submitCodeFromUI() async {
     if (_verificationId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Aucun code de vérification disponible')),
-      );
+      AppAlerts.warning(context, 'Aucun code de vérification disponible');
       return;
     }
 
     if (_smsController.text.trim().length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Code SMS invalide')),
-      );
+      AppAlerts.error(context, 'Code SMS invalide');
       return;
     }
 
@@ -131,9 +123,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
         _verifyInProgress = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        AppAlerts.fromError(context, e);
       }
     }
   }
@@ -150,12 +140,12 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
     final authState = ref.watch(authControllerProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Connexion par téléphone'),
         elevation: 0,
         backgroundColor: Colors.transparent,
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
@@ -169,7 +159,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: AppSpacing.xxl),
-              Text(
+              const Text(
                 'Connexion\npar téléphone',
                 style: AppTextStyles.h1,
               ),
@@ -177,15 +167,17 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
               Text(
                 'Nous vous enverrons un code SMS pour vous\nconnecter à votre compte.',
                 style: AppTextStyles.bodyLarge.copyWith(
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: AppSpacing.xxxxl),
               TextFormField(
                 controller: _phoneController,
                 validator: (v) {
-                  if (!_smsSent) {
-                    return 'Le numéro est requis';
+                  // Format international tolérant : au moins 8 chiffres.
+                  final digits = v?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
+                  if (digits.length < 8) {
+                    return 'Numéro invalide (ex. +33 6 12 34 56 78)';
                   }
                   return null;
                 },
@@ -199,14 +191,14 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
               PrimaryButton(
                 label: _smsSent ? 'Renvoyer le code' : 'Continuer',
                 isLoading: _verifyInProgress || authState.isLoading,
-                onPressed: _smsSent ? _requestCode : _requestCode,
+                onPressed: _requestCode,
               ),
               if (_smsSent) ...[
                 const SizedBox(height: AppSpacing.xxl),
                 Text(
                   'Entrez le code reçu par SMS',
                   style: AppTextStyles.bodyLarge.copyWith(
-                    color: AppColors.textSecondary,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -220,7 +212,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 PrimaryButton(
-                  label: 'Verifier',
+                  label: 'Vérifier',
                   isLoading: _verifyInProgress,
                   onPressed: _submitCodeFromUI,
                 ),
@@ -229,7 +221,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
+                  const Text(
                     'Pas encore de compte ? ',
                     style: AppTextStyles.bodyMedium,
                   ),
@@ -249,7 +241,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
+                  const Text(
                     'Preferez-vous vous connecter avec ? ',
                     style: AppTextStyles.bodyMedium,
                   ),

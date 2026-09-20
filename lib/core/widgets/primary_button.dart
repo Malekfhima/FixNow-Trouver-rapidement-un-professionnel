@@ -26,11 +26,12 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final btn = ElevatedButton(
       onPressed: isLoading ? null : onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: backgroundColor ?? AppColors.primary,
-        foregroundColor: foregroundColor ?? AppColors.white,
+        backgroundColor: backgroundColor ?? colors.primary,
+        foregroundColor: foregroundColor ?? colors.onPrimary,
         minimumSize: Size(0, height ?? 52),
         textStyle: AppTextStyles.buttonLarge,
         shape: RoundedRectangleBorder(
@@ -39,12 +40,12 @@ class PrimaryButton extends StatelessWidget {
         disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.5),
       ),
       child: isLoading
-          ? const SizedBox(
+          ? SizedBox(
               height: 22,
               width: 22,
               child: CircularProgressIndicator(
                 strokeWidth: 2.5,
-                color: AppColors.white,
+                color: colors.onPrimary,
               ),
             )
           : Row(
