@@ -177,8 +177,16 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  /// Signs the user out. Never throws — the UI always navigates back to
+  /// the login screen, and a failure is surfaced in [AuthState.error].
   Future<void> signOut() async {
-    await _authService.signOut();
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _authService.signOut();
+      state = state.copyWith(isLoading: false);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
   }
 }
 

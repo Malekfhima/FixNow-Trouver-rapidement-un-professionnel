@@ -420,6 +420,23 @@ describe('professionals : agrégation des notes', () => {
       setDoc(doc(db, 'professionals', 'p10'), { ratingAvg: 5, status: 'rejected' }, { merge: true })
     );
   });
+
+  test("un pro ne peut PAS modifier sa propre note (auto-promotion)", async () => {
+    await seedUser('p11', 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'professionals', 'p11'), {
+        name: 'Pro',
+        categories: ['Plomberie'],
+        status: 'approved',
+        ratingAvg: 3,
+        ratingCount: 5,
+      });
+    });
+    const db = authedDb('p11', 'pro');
+    await assertFails(
+      setDoc(doc(db, 'professionals', 'p11'), { ratingAvg: 5, ratingCount: 99 }, { merge: true })
+    );
+  });
 });
 
 describe('categories : écriture admin uniquement', () => {

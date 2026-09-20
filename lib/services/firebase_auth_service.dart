@@ -13,9 +13,16 @@ final currentUserProvider = Provider<User?>((ref) {
 });
 
 /// Service that wraps Firebase Authentication methods.
+///
+/// [auth] and [google] are injectable for tests (mocks); they default to
+/// the real Firebase/Google instances.
 class FirebaseAuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _google = GoogleSignIn();
+  FirebaseAuthService({FirebaseAuth? auth, GoogleSignIn? google})
+      : _auth = auth ?? FirebaseAuth.instance,
+        _google = google ?? GoogleSignIn();
+
+  final FirebaseAuth _auth;
+  final GoogleSignIn _google;
 
   /// Current signed-in user.
   User? get currentUser => _auth.currentUser;
@@ -105,9 +112,20 @@ class FirebaseAuthService {
     await _auth.sendPasswordResetEmail(email: email);
   }
 
+  /// Signs the user out. Firebase Auth first (the part that really
+  /// matters), then Google Sign-In best-effort: the Google plugin can
+  /// fail on some platforms or with an already-expired session, and that
+  /// must never block the actual sign-out.
   Future<void> signOut() async {
-    await _google.signOut();
-    await _auth.signOut();
+    try {
+      await _auth.signOut();
+    } finally {
+      try {
+        await _google.signOut();
+      } catch (_) {
+        // Google session cleanup is best-effort.
+      }
+    }
   }
 }
 

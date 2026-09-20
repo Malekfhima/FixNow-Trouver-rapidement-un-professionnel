@@ -1,6 +1,7 @@
 {
   "projects": {
-    "default": "fixnow-dd022"
+    "default": "fixnow-dd022",
+    "current": "fixnow-dd022"
   },
   "targets": {},
   "etags": {}

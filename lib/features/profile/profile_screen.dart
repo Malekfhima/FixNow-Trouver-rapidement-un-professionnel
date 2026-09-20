@@ -115,14 +115,22 @@ class ProfileScreen extends ConsumerWidget {
                 onTap: () => context.push('/debug-seed'),
               ),
 
-            const SizedBox(height: AppSpacing.xxl),            // Logout
+            const SizedBox(height: AppSpacing.xxl),
+            // Logout
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () async {
                   await ref.read(authControllerProvider.notifier).signOut();
-                  if (context.mounted) {
-                    context.go('/login');
+                  if (!context.mounted) return;
+                  // Le router redirige déjà vers /login quand la session
+                  // tombe ; on force la navigation au cas où.
+                  context.go('/login');
+                  final error = ref.read(authControllerProvider).error;
+                  if (error != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Déconnexion : $error')),
+                    );
                   }
                 },
                 icon: const Icon(Icons.logout, color: AppColors.error),

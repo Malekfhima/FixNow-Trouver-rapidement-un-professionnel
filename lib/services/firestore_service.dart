@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fixnow/models/user_model.dart';
@@ -249,14 +251,74 @@ class FirestoreService {
 
   // ── Chats ────────────────────────────────────────────────────────
 
+  /// Real-time stream of every conversation where [userId] is a participant.
+  ///
+  /// Chat documents store `clientId` / `proId` (no `participants` array),
+  /// so we merge two queries — one per side — client-side.
   Stream<List<Chat>> userChatsStream(String userId) {
-    return _db
+    final asClient = _db
         .collection('chats')
-        .where('participants', arrayContains: userId)
+        .where('clientId', isEqualTo: userId)
         .orderBy('lastMessageAt', descending: true)
         .snapshots()
         .map((snap) =>
             snap.docs.map((doc) => Chat.fromFirestore(doc)).toList());
+
+    final asPro = _db
+        .collection('chats')
+        .where('proId', isEqualTo: userId)
+        .orderBy('lastMessageAt', descending: true)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((doc) => Chat.fromFirestore(doc)).toList());
+
+    return _mergeChatStreams([asClient, asPro]);
+  }
+
+  /// Merges several chat streams, deduplicates by id and keeps them sorted
+  /// by most recent message first.
+  Stream<List<Chat>> _mergeChatStreams(List<Stream<List<Chat>>> streams) {
+    late StreamController<List<Chat>> controller;
+    final subscriptions = <StreamSubscription<List<Chat>>>[];
+    final latest = List<List<Chat>?>.filled(streams.length, null);
+
+    void emit() {
+      final byId = <String, Chat>{};
+      for (final list in latest) {
+        if (list == null) continue;
+        for (final chat in list) {
+          byId[chat.id] = chat;
+        }
+      }
+      final merged = byId.values.toList()
+        ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+      if (!controller.isClosed) controller.add(merged);
+    }
+
+    controller = StreamController<List<Chat>>(
+      onListen: () {
+        for (var i = 0; i < streams.length; i++) {
+          subscriptions.add(
+            streams[i].listen(
+              (list) {
+                latest[i] = list;
+                emit();
+              },
+              onError: (Object e) {
+                if (!controller.isClosed) controller.addError(e);
+              },
+            ),
+          );
+        }
+      },
+      onCancel: () async {
+        for (final sub in subscriptions) {
+          await sub.cancel();
+        }
+      },
+    );
+
+    return controller.stream;
   }
 
   Stream<List<ChatMessage>> messagesStream(String chatId) {
