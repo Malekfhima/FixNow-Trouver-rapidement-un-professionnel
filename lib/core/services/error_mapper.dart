@@ -88,6 +88,12 @@ class ErrorMapper {
       case 'aborted':
       case 'unavailable':
         return 'Service momentanément indisponible. Réessayez.';
+      case 'image-too-large':
+        return 'Image trop lourde : 5 Mo maximum. Réduisez sa taille et réessayez.';
+      case 'unauthorized':
+        return 'Action non autorisée sur ce fichier.';
+      case 'quota-exceeded':
+        return 'Espace de stockage saturé. Réessayez plus tard.';
       case 'unauthenticated':
         return 'Votre session a expiré. Veuillez vous reconnecter.';
       case 'resource-exhausted':

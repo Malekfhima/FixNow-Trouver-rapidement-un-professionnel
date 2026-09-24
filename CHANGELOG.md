@@ -58,7 +58,19 @@ Chaque ligne renvoie au fichier modifié.
 
 ## PARTIE 3 — Application Flutter (backend côté client)
 
-_(mise à jour à venir)_
+| # | Bug / risque | Cause | Correctif | Fichier |
+|---|---|---|---|---|
+| 1 | L'app pouvait écrire des champs refusés par les nouvelles règles (création avec `price`, acceptation de devis écrivant `price`, recompute de notes hors batch) | Le client suivait l'ancien contrat des règles | `FirestoreService` conforme : batch avis+compteurs, `budget` séparé de `price`, `acceptQuote` n'écrit plus que `status`, miroir `publicProfiles` séquentiel | `lib/services/firestore_service.dart`, `lib/features/booking/*`, `lib/models/service_request_model.dart` |
+| 2 | Erreurs `FirebaseException` parfois brutes (`e.toString()`), codes Storage non mappés | `ErrorMapper` incomplet + 3 écrans contournant le mapper | Messages FR pour `permission-denied`, `unavailable`, `image-too-large`, `unauthorized`, `quota-exceeded` ; les 3 écrans passent par `ErrorMapper` (aucun écran blanc, aucune exception non gérée) | `lib/core/services/error_mapper.dart`, `lib/features/review/review_screen.dart`, `lib/features/professional_profile/pro_profile_controller.dart`, `lib/features/pro_dashboard/pro_profile_edit_screen.dart` |
+| 3 | App Check **déclaré mais jamais activé** (le package était dans pubspec sans code) | Activation absente | Activation dans `main()` : **Play Integrity + DeviceCheck en release**, **provider debug en dev**, jeton lisible via `--dart-define=APP_CHECK_DEBUG_TOKEN=…`, `try/catch` pour ne jamais bloquer le démarrage. Aucun secret commité (`.gitignore` : `tool/serviceAccount*.json`, `.env*`) | `lib/main.dart`, `.gitignore` |
+| 4 | La recherche par catégorie pouvait échouer (index composite manquant) — et les requêtes pros doivent toutes filtrer `status == 'approved'` sous peine d'être refusées par les règles | Index composites incomplets | `searchProfessionals` filtre bien `where('status','==','approved')` (+ `arrayContains`) vérifié ; index composite `professionals (status ASC, categories ARRAY_CONTAINS)` ajouté | `firestore.indexes.json`, `lib/services/firestore_service.dart` |
+| 5 | Upload > 5 Mo refusé par les règles Storage avec un message obscur | Pas de garde côté client | Contrainte 5 Mo miroir + message français avant l'upload | `lib/services/storage_service.dart` |
+
+**Reste à faire / décision attendue (Partie 3) :**
+- **Enregistrer le jeton App Check debug** dans la Console Firebase (App Check → débogueurs)
+  après le premier lancement en dev ; activer App Check en console pour le Play Integrity.
+- Compétition : si la console App Check est activée en mode « enforcement », tester les
+  anciens appareils (DeviceCheck/Play Integrity échec rare).
 
 ---
 

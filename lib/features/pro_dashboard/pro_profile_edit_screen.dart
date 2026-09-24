@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/constants/app_constants.dart';
 import 'package:fixnow/services/storage_service.dart';
@@ -108,7 +109,7 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _loadError = e.toString();
+        _loadError = ErrorMapper.message(e);
       });
     }
   }
