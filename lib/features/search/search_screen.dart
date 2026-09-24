@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/pro_card.dart';
 import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/features/search/search_controller.dart';
@@ -41,10 +42,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
     super.initState();
     _tabController = TabController(length: _categories.length, vsync: this);
     
-    // Check for initial category in query params
+    // Check for initial category in query params.
+    // GoRouter.maybeOf : l'écran reste montable même hors route GoRouter
+    // (tests widget, deep-link raté) — aucune exception non gérée.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final state = GoRouterState.of(context);
-      final category = state.uri.queryParameters['category'];
+      final router = GoRouter.maybeOf(context);
+      final category = router?.state.uri.queryParameters['category'];
       if (category != null && _categories.contains(category)) {
         final index = _categories.indexOf(category);
         _tabController.animateTo(index);
@@ -97,6 +100,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: _searchController.text.isNotEmpty 
                     ? IconButton(
+                        tooltip: 'Effacer la recherche',
                         icon: const Icon(Icons.clear_rounded),
                         onPressed: () {
                           _searchController.clear();
@@ -244,21 +248,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.search_off_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Aucun professionnel trouvé',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyLarge.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+    return EmptyState(
+      icon: Icons.search_off_rounded,
+      title: 'Aucun professionnel trouvé',
+      message: 'Essayez une autre catégorie ou retirez vos filtres.',
+      actionLabel: 'Réinitialiser les filtres',
+      onAction: () {
+        _tabController.animateTo(0);
+        ref.read(searchControllerProvider.notifier).applyFilters(
+              maxPrice: null,
+              minRating: 0,
+              sort: SearchSort.rating,
+            );
+      },
     );
   }
 
@@ -297,9 +299,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
   Color _categoryColor(Professional pro) {
     if (pro.categories.isEmpty) return AppColors.primary;
     final base = _categoryColors[pro.categories.first] ?? AppColors.primary;
-    // En sombre : éclaircir l'icône pour garder le contraste.
+    // En sombre : mélanger vers la couleur de texte du thème.
     if (Theme.of(context).brightness == Brightness.dark) {
-      return Color.lerp(base, Colors.white, 0.35)!;
+      return Color.lerp(base, Theme.of(context).colorScheme.onSurface, 0.35)!;
     }
     return base;
   }
@@ -307,9 +309,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
   Color _categoryBgColor(Professional pro) {
     if (pro.categories.isEmpty) return Theme.of(context).colorScheme.primaryContainer;
     final base = _categoryBgColors[pro.categories.first] ?? Theme.of(context).colorScheme.primaryContainer;
-    // En sombre : assombrir le pastel pour éviter l'éblouissement.
+    // En sombre : mélanger vers la surface du thème.
     if (Theme.of(context).brightness == Brightness.dark) {
-      return Color.lerp(base, Colors.black, 0.65)!;
+      return Color.lerp(base, Theme.of(context).colorScheme.surface, 0.65)!;
     }
     return base;
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_avatar.dart';
 
 /// Horizontal card showing a professional in the "Popular near you" list.
 class ProCard extends StatelessWidget {
@@ -45,47 +46,55 @@ class ProCard extends StatelessWidget {
           const SizedBox(width: AppSpacing.md),
 
           // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    // Category badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: AppSpacing.xs,
-                      ),
-                      decoration: BoxDecoration(
-                        color: categoryBgColor,
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                      ),
-                      child: Text(
-                        category,
-                        style: AppTextStyles.caption.copyWith(
-                          color: categoryColor,
-                          fontWeight: FontWeight.w600,
+          Expanded(              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Badge catégorie + note : FittedBox garantit l'absence
+                  // d'overflow quelles que soient la largeur (320 dp) et
+                  // l'échelle de texte (1.5×).
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Category badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                            vertical: AppSpacing.xs,
+                          ),
+                          decoration: BoxDecoration(
+                            color: categoryBgColor,
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                          ),
+                          child: Text(
+                            category,
+                            style: AppTextStyles.caption.copyWith(
+                              color: categoryColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: AppSpacing.sm),
+                        // Rating (couleur « texte » du thème : contraste AA)
+                        Icon(Icons.star,
+                            color: context.semanticColors.warning, size: 14),
+                        const SizedBox(width: 2),
+                        Text(
+                          rating.toStringAsFixed(1),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: colors.onSurface,
+                          ),
+                        ),
+                        Text(
+                          ' ($reviewCount)',
+                          style: AppTextStyles.caption,
+                        ),
+                      ],
                     ),
-                    const Spacer(),
-                    // Rating
-                    const Icon(Icons.star, color: AppColors.warning, size: 14),
-                    const SizedBox(width: 2),
-                    Text(
-                      rating.toStringAsFixed(1),
-                      style: AppTextStyles.bodySmall.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: colors.onSurface,
-                      ),
-                    ),
-                    Text(
-                      ' ($reviewCount)',
-                      style: AppTextStyles.caption,
-                    ),
-                  ],
-                ),
+                  ),
                 const SizedBox(height: AppSpacing.xs),
 
                 Text(
@@ -100,6 +109,8 @@ class ProCard extends StatelessWidget {
                   price == 0
                       ? 'Sur devis'
                       : '${price.toStringAsFixed(0)} € / heure',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w600,
@@ -111,23 +122,25 @@ class ProCard extends StatelessWidget {
 
           const SizedBox(width: AppSpacing.md),
 
-          // Buttons
-          Column(
-            children: [
-              OutlinedButton(
-                onPressed: onViewProfile,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.xs + 2,
-                  ),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  textStyle: AppTextStyles.buttonSmall,
-                  side: const BorderSide(color: AppColors.primary, width: 1),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                  ),
+          // Buttons (largeur bridée : la carte reste stable de 320 dp
+          // à 1.5× de facteur de texte — aucun overflow horizontal).
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 116),
+            child: Column(
+              children: [
+                OutlinedButton(
+                  onPressed: onViewProfile,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
+                    ),
+                    minimumSize: const Size(64, 48),
+                    textStyle: AppTextStyles.buttonSmall,
+                    side: const BorderSide(color: AppColors.primary, width: 1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
                 ),
                 child: const Text('Voir profil'),
               ),
@@ -137,10 +150,9 @@ class ProCard extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.md,
-                    vertical: AppSpacing.xs + 2,
+                    vertical: AppSpacing.sm,
                   ),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: const Size(64, 48),
                   backgroundColor: AppColors.primary,
                   foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   elevation: 0,
@@ -151,7 +163,8 @@ class ProCard extends StatelessWidget {
                 ),
                 child: const Text('Réserver'),
               ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -160,14 +173,10 @@ class ProCard extends StatelessWidget {
 
   Widget _buildAvatar(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return CircleAvatar(
+    return AppAvatar(
+      url: imageUrl,
       radius: 30,
-      backgroundColor: cs.primaryContainer,
-      backgroundImage:
-          imageUrl != null ? NetworkImage(imageUrl!) : null,
-      child: imageUrl == null
-          ? Icon(Icons.person, color: cs.onPrimaryContainer, size: 30)
-          : null,
+      foregroundColor: cs.onPrimaryContainer,
     );
   }
 }

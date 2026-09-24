@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/features/notifications/notifications_controller.dart';
 import 'package:fixnow/models/notification_model.dart';
@@ -44,18 +44,11 @@ class NotificationsScreen extends ConsumerWidget {
       ),
       body: async.when(
         data: (items) => items.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.notifications_off_outlined,
-                        size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    const SizedBox(height: AppSpacing.lg),
-                    Text('Aucune notification',
-                        style: AppTextStyles.h4
-                            .copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  ],
-                ),
+            ? const EmptyState(
+                icon: Icons.notifications_off_outlined,
+                title: 'Aucune notification',
+                message:
+                    'Vous serez prévenu des devis, messages et prestations.',
               )
             : RefreshIndicator(
                 onRefresh: () async => ref.invalidate(notificationsProvider),
@@ -70,7 +63,10 @@ class NotificationsScreen extends ConsumerWidget {
                 ),
               ),
         loading: () => const NotificationSkeletonList(),
-        error: (e, _) => Center(child: Text(ErrorMapper.message(e))),
+        error: (e, _) => ErrorState(
+          error: e,
+          onRetry: () => ref.invalidate(notificationsProvider),
+        ),
       ),
     );
   }

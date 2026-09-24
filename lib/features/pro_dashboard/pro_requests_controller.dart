@@ -45,6 +45,14 @@ class ProRequestsController extends StateNotifier<ProRequestsState> {
   final Ref _ref;
 
   ProRequestsController(this._ref) : super(const ProRequestsState()) {
+    // La session peut n'être résolue qu'APRÈS la construction : recharge
+    // dès qu'un utilisateur apparaît (sinon « Non connecté » définitif).
+    _ref.listen<String?>(
+      currentUserProvider.select((u) => u?.uid),
+      (previous, next) {
+        if (previous == null && next != null) loadRequests();
+      },
+    );
     loadRequests();
   }
 

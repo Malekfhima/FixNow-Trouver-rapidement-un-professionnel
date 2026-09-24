@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_avatar.dart';
 import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/features/chat/chat_controller.dart';
 import 'package:fixnow/models/chat_model.dart';
@@ -108,27 +109,26 @@ class _ChatListItem extends ConsumerWidget {
     final other = ref.watch(userByIdProvider(otherId)).valueOrNull;
     final unread = currentUser == null ? 0 : chat.unreadFor(currentUser.uid);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: AppRadius.lgAll,
-          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          boxShadow: AppShadows.sm,
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              backgroundImage:
-                  other?.avatarUrl != null ? NetworkImage(other!.avatarUrl!) : null,
-              child: other?.avatarUrl == null
-                  ? const Icon(Icons.person, color: AppColors.primary, size: 22)
-                  : null,
-            ),
+    return Semantics(
+      button: true,
+      label: 'Ouvrir la conversation',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: AppRadius.lgAll,
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+            boxShadow: AppShadows.sm,
+          ),
+          child: Row(
+            children: [
+              AppAvatar(
+                url: other?.avatarUrl,
+                radius: 22,
+                foregroundColor: AppColors.primary,
+              ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
@@ -164,24 +164,26 @@ class _ChatListItem extends ConsumerWidget {
                 if (unread > 0) ...[
                   const SizedBox(height: AppSpacing.xs),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: const BoxDecoration(
-                      color: AppColors.accent,
-                      shape: BoxShape.circle,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: context.semanticColors.accent,
+                      borderRadius: AppRadius.fullAll,
                     ),
                     child: Text(
-                      '$unread',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
+                      unread > 99 ? '99+' : '$unread',
+                      style: AppTextStyles.caption.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
                       ),
                     ),
                   ),
                 ],
               ],
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );

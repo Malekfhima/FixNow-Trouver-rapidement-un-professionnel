@@ -1108,10 +1108,12 @@ class SemanticColors extends ThemeExtension<SemanticColors> {
   });
 
   static const light = SemanticColors(
-    success: Color(0xFF16A34A),
-    warning: Color(0xFFD97706),
+    // Variantes « texte » (WCAG AA ≥ 4.5:1 sur surface claire) — les
+    // anciennes valeurs (16A34A / D97706 / E85A2F) échouaient au contraste.
+    success: Color(0xFF15803D),
+    warning: Color(0xFFB45309),
     info: Color(0xFF2563EB),
-    accent: Color(0xFFE85A2F),
+    accent: Color(0xFFC2410C),
     neutral: Color(0xFF6B7280),
   );
 

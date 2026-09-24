@@ -76,4 +76,40 @@ Chaque ligne renvoie au fichier modifié.
 
 ## PARTIE 4 — Design / UI (Material 3)
 
-_(mise à jour à venir)_
+| # | Bug / problème | Cause | Correctif | Fichier(s) |
+|---|---|---|---|---|
+| 1 | Couleurs et tailles **codées en dur** dans les écrans (pas de source unique) | Styles locaux `Color(0x…)` / `EdgeInsets` magic numbers dispersés | Un seul `ColorScheme` Material 3 (`useMaterial3`), typographie via `AppTextStyles`, espacements/rayons via `AppSpacing`/`AppRadius` ; écrans migrés | `lib/core/theme/app_theme.dart`, `lib/features/home/home_screen.dart`, `lib/features/search/search_screen.dart`, `lib/features/chat/chat_list_screen.dart`, `lib/features/client_dashboard/orders_screen.dart`, `lib/features/pro_dashboard/pro_requests_screen.dart`, `lib/core/widgets/pro_card.dart` |
+| 2 | **Contraste insuffisant (WCAG AA)** en clair et en sombre : bannières « Hors ligne » et toasts illisibles sur `inverseSurface` | `SemanticColors` identique clair/sombre ; bannière texte blanc sur fond clair | Palette `success/warning/accent` recalibrée AA (clair : vert 0xFF15803D, ambre 0xFFB45309, orange 0xFFC2410C) ; bannières/toasts : **palette opposée selon `brightness`**, texte choisi selon la luminance | `lib/core/theme/app_theme.dart`, `lib/core/widgets/app_alerts.dart` |
+| 3 | Écrans à données Firestore **sans état vide ni erreur** (page blanche ou silencieuse) | Seul le loading existait (parfois aussi absent) | `EmptyState` (illustration + message + action) et `ErrorState` (message FR + bouton **Réessayer**) déployés : accueil, recherche, commandes, demandes pro, notifications, chat, profil pro. Skeletons corrigés (plus de overflow) | `lib/core/widgets/app_alerts.dart` (`EmptyState`/`ErrorState` + `_centeredScrollable`), `lib/core/widgets/skeleton.dart`, `lib/features/home/home_screen.dart`, `lib/features/search/search_screen.dart`, `lib/features/client_dashboard/orders_screen.dart`, `lib/features/pro_dashboard/pro_requests_screen.dart`, `lib/features/notifications/notifications_screen.dart`, `lib/features/professional_profile/pro_profile_screen.dart` |
+| 4 | **RenderFlex overflow à 320 dp** (carte pro, grille d'accueil, section populaire) et pas de contrainte largeur sur web | Hauteurs/largeurs fixes, `Row` non bornées | Grille `childAspectRatio 0.65`, carte pro `ConstrainedBox(maxWidth: 116)` + `FittedBox`, section populaire `Flexible` + `height 196`, titre en `Flexible` ; **max-width 600** centré sur web/desktop via `LayoutBuilder` | `lib/core/widgets/pro_card.dart`, `lib/core/widgets/skeleton.dart`, `lib/features/home/home_screen.dart`, `lib/main.dart` |
+| 5 | Zones tactiles **< 48 dp**, icônes sans `Semantics`/tooltip, crash `GoRouter` hors route dans la recherche | `IconButton` compacts sans tooltip, `context.go` direct | Boutons/outils ≥ 48 dp (`OutlineButton` borné à 48), tooltips ajoutés (cloche « Voir les notifications », effacer recherche, étoiles d'avis), `Semantics(button)` sur les items de chat, `GoRouter.maybeOf` anti-crash, badge **99+** | `lib/core/widgets/outline_button.dart`, `lib/features/home/home_screen.dart`, `lib/features/search/search_screen.dart`, `lib/features/chat/chat_list_screen.dart`, `lib/features/review/review_screen.dart` |
+| 6 | Boutons d'envoi **ré- cliquables** pendant la requête (double réservation) | Pas d'état `isLoading` local | `OutlineButton(isLoading:)` : libellé masqué, indicateur affiché, `onPressed` neutralisé pendant l'envoi | `lib/core/widgets/outline_button.dart` |
+| 7 | Images réseau **sans placeholder ni fallback** (avatars vides, flash blanc) | `Image.network` direct | Composant **`AppAvatar`** (initiales par défaut, `cached_network_image` pour l'URL) + `CachedNetworkImage` (placeholder/errorWidget) pour la galerie de profils | `lib/core/widgets/app_avatar.dart` (nouveau), `lib/features/professional_profile/pro_profile_screen.dart`, `lib/features/pro_dashboard/pro_profile_edit_screen.dart`, + tous les écrans listés en 8 |
+| 8 | Barre de navigation **sans badge** messages non lus ; écrans chat/profil/admin sans avatar commun | Compteur absent | `unreadMessagesCountProvider` (stream fusionné des conversations) branché sur le badge de l'onglet Messages ; `AppAvatar` généralisé (chat, avis, profil, admin, pro) | `lib/core/widgets/bottom_nav_bar.dart`, `lib/features/chat/chat_controller.dart`, `lib/features/chat/chat_list_screen.dart`, `lib/features/chat/chat_detail_screen.dart`, `lib/features/profile/profile_screen.dart`, `lib/features/admin/admin_screen.dart`, `lib/features/review/review_screen.dart` |
+| 9 | **Race condition** : « Mes demandes » du pro et la liste de chat restaient vides au premier lancement | Les contrôleurs chargeaient avant la résolution de la session (`authStateChanges` async) | Listener `_ref.listen(currentUserProvider.select(…))` qui **recharge dès qu'un utilisateur apparaît** | `lib/features/chat/chat_controller.dart`, `lib/features/pro_dashboard/pro_requests_controller.dart` |
+| 10 | Budget/prix affichés indifféremment (le champ `price` est réservé au pro) | Libellé unique « Prix » | Séparateur `budget` (client, avant devis) / `price` (pro, après acceptation) | `lib/features/client_dashboard/orders_screen.dart` |
+| 11 | Aucun **widget test** sur les écrans critiques | Absence de tests d'UI | `test/critical_screens_test.dart` : 8 tests — accueil (nominal / vide / erreur), recherche (nominal / vide), réservation (validation FR + budget), chat (badge non lus + vide) ; tous à **320 dp × 1.5** avec `tester.takeException()` = null (anti-overflow) | `test/critical_screens_test.dart` (nouveau) |
+
+**Vérifications Partie 4 :** `flutter analyze` → 0 erreur ; `flutter test` → **27/27** ;
+`npm run test:rules` → **216/216**.
+
+**Reste à faire / décision attendue (Partie 4) :**
+- Passer les écrans restants (paramètres, aide, onboarding) en `EmptyState`/`ErrorState`
+  si des flux Firestore y sont ajoutés.
+- Test golden (`.png` de référence) pour figer le rendu clair/sombre — décision : à faire
+  uniquement si une CI est mise en place.
+- Vérifier `textScaleFactor` 1.5 sur tablette (au-delà de 2.0 non testé).
+
+---
+
+## SYNTHÈSE FINALE — Reste à faire / Décisions attendues
+
+| # | Sujet | Type | Détail |
+|---|---|---|---|
+| 1 | **Cloud Functions (plan Blaze)** | Décision budget | Remplacer les `get()` de vérification de lien (notifications, agrégation des notes) par des fonctions serveur ; supprimer le miroir séquentiel `publicProfiles` — documenté dans `firestore.rules` |
+| 2 | **Backfill `publicProfiles`** | Action | `npm run tool:public-profiles` (Admin SDK, idempotent) pour les comptes créés avant la faille 7 |
+| 3 | **Migration des admins vers custom claims** | Action | `npm run tool:claims` puis bascule de `isAdmin()` en 100 % `request.auth.token.admin` (le fallback legacy reste actif d'ici là) |
+| 4 | **Tests automatisés `storage.rules`** | Action | Le socle `npm run test:rules` ne couvre que Firestore ; ajouter `firebase emulators:exec --only storage` + dédié |
+| 5 | **Jeton App Check debug** | Action | Enregistrer le jeton (`--dart-define=APP_CHECK_DEBUG_TOKEN`) dans la Console Firebase → App Check → débogueurs, puis activer l'enforcement Play Integrity |
+| 6 | **Index composites** | Action | `firestore.indexes.json` livré → déployer (`firebase deploy --only firestore:indexes`) et vérifier l'absence d'index manquants dans la console |
+| 7 | CI (analyze + test + rules) | Décision | Recommandé : GitHub Actions lançant les 3 commandes de vérification à chaque push |

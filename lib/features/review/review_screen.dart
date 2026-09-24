@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/core/widgets/app_alerts.dart';
+import 'package:fixnow/core/widgets/app_avatar.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/utils/validators.dart';
 import 'package:fixnow/features/professional_profile/pro_profile_controller.dart';
@@ -101,15 +102,10 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
             // Pro summary
             Row(
               children: [
-                CircleAvatar(
+                AppAvatar(
+                  url: pro?.avatarUrl,
                   radius: 26,
-                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                  backgroundImage: pro?.avatarUrl != null
-                      ? NetworkImage(pro!.avatarUrl!)
-                      : null,
-                  child: pro?.avatarUrl == null
-                      ? const Icon(Icons.person, color: AppColors.primary)
-                      : null,
+                  foregroundColor: AppColors.primary,
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
@@ -140,6 +136,8 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
                 children: List.generate(5, (index) {
                   final filled = index < _rating;
                   return IconButton(
+                    // Cible tactile 48 dp + libellé lisible par VoiceOver/TalkBack.
+                    tooltip: 'Attribuer ${index + 1} étoile${index > 0 ? 's' : ''}',
                     onPressed: () => setState(() => _rating = index + 1),
                     icon: Icon(
                       filled ? Icons.star_rounded : Icons.star_outline_rounded,

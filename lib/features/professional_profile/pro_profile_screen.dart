@@ -1,7 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_alerts.dart';
+import 'package:fixnow/core/widgets/app_avatar.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/widgets/outline_button.dart';
 import 'package:fixnow/core/widgets/skeleton.dart';
@@ -29,21 +32,11 @@ class ProProfileScreen extends ConsumerWidget {
       return Scaffold(
         backgroundColor: Theme.of(context).colorScheme.surface,
         appBar: AppBar(title: const Text('Profil')),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 64, color: AppColors.error),
-              const SizedBox(height: AppSpacing.lg),
-              const Text('Erreur de chargement', style: AppTextStyles.h4),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                state.error!,
-                style: AppTextStyles.bodySmall,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+        body: ErrorState(
+          error: state.error,
+          onRetry: () => ref
+              .read(proProfileControllerProvider(proId).notifier)
+              .fetchData(),
         ),
       );
     }
@@ -99,17 +92,14 @@ class ProProfileScreen extends ConsumerWidget {
                       ),
                       // Avatar
                       Center(
-                        child: CircleAvatar(
+                        child: AppAvatar(
                           radius: 50,
                           backgroundColor:
                               Colors.white.withValues(alpha: 0.2),
-                          backgroundImage: pro.avatarUrl != null
-                              ? NetworkImage(pro.avatarUrl!)
-                              : null,
-                          child: pro.avatarUrl == null
-                              ? Icon(Icons.person,
-                                  color: Theme.of(context).colorScheme.onPrimary, size: 50)
-                              : null,
+                          url: pro.avatarUrl,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onPrimary,
+                          icon: Icons.person,
                         ),
                       ),
                     ],
@@ -225,10 +215,15 @@ class ProProfileScreen extends ConsumerWidget {
                     delegate: SliverChildBuilderDelegate(
                       (context, index) => ClipRRect(
                         borderRadius: BorderRadius.circular(AppRadius.sm),
-                        child: Image.network(
-                          pro.gallery[index],
+                        child: CachedNetworkImage(
+                          imageUrl: pro.gallery[index],
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
+                          placeholder: (_, __) => Container(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHigh,
+                          ),
+                          errorWidget: (_, __, ___) => Container(
                             color: Theme.of(context).colorScheme.primaryContainer,
                             child: Center(
                               child: Icon(Icons.broken_image_outlined,

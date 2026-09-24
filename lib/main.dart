@@ -86,8 +86,25 @@ class FixNowApp extends ConsumerWidget {
         darkTheme: AppTheme.dark,
         themeMode: themeMode,
         routerConfig: router,
-        builder: (context, child) =>
-            OfflineBanner(child: child ?? const SizedBox.shrink()),
+        builder: (context, child) => OfflineBanner(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final content = child ?? const SizedBox.shrink();
+              // Responsive : contrainte max-width sur web / desktop, aucun
+              // changement sous 640 px (mobile 320 px → tablette).
+              if (constraints.maxWidth <= 640) return content;
+              return ColoredBox(
+                color: Theme.of(context).colorScheme.surface,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 600),
+                    child: content,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/core/services/error_mapper.dart';
+import 'package:fixnow/core/widgets/app_avatar.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/features/admin/admin_controller.dart';
@@ -163,14 +164,10 @@ class _ProsTab extends StatelessWidget {
       itemBuilder: (context, index) {
         final pro = pros[index];
         return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            backgroundImage: pro.avatarUrl != null
-                ? NetworkImage(pro.avatarUrl!)
-                : null,
-            child: pro.avatarUrl == null
-                ? const Icon(Icons.person, color: AppColors.primary)
-                : null,
+          leading: AppAvatar(
+            url: pro.avatarUrl,
+            radius: 20,
+            foregroundColor: AppColors.primary,
           ),
           title: Text(pro.name, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text(
@@ -459,13 +456,10 @@ class _ProCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                backgroundImage:
-                    pro.avatarUrl != null ? NetworkImage(pro.avatarUrl!) : null,
-                child: pro.avatarUrl == null
-                    ? const Icon(Icons.person, color: AppColors.primary)
-                    : null,
+              AppAvatar(
+                url: pro.avatarUrl,
+                radius: 20,
+                foregroundColor: AppColors.primary,
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(

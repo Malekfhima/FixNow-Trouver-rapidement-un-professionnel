@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -367,11 +368,27 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                                         i < _galleryUrls.length;
                                         i++)
                                       _galleryThumb(
-                                        child: Image.network(
-                                          _galleryUrls[i],
+                                        child: CachedNetworkImage(
+                                          imageUrl: _galleryUrls[i],
                                           width: 96,
                                           height: 96,
                                           fit: BoxFit.cover,
+                                          placeholder: (_, __) => Container(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerHigh,
+                                            width: 96,
+                                            height: 96,
+                                          ),
+                                          errorWidget: (_, __, ___) => Container(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerHigh,
+                                            width: 96,
+                                            height: 96,
+                                            child: const Icon(
+                                                Icons.broken_image_outlined),
+                                          ),
                                         ),
                                         onRemove: () => setState(
                                             () => _galleryUrls.removeAt(i)),

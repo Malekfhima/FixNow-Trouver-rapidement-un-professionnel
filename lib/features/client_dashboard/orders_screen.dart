@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
-import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/widgets/skeleton.dart';
@@ -44,31 +43,21 @@ class OrdersScreen extends ConsumerWidget {
                 ),
               ),
         loading: () => const RequestCardSkeletonList(),
-        error: (err, stack) =>
-            Center(child: Text(ErrorMapper.message(err))),
+        error: (err, stack) => ErrorState(
+          error: err,
+          onRetry: () => ref.invalidate(clientRequestsProvider),
+        ),
       ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.receipt_long_outlined, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Aucune commande',
-            style: AppTextStyles.h4.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          const Text(
-            'Vos demandes de service\napparaîtront ici',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodySmall,
-          ),
-        ],
-      ),
+    return EmptyState(
+      icon: Icons.receipt_long_outlined,
+      title: 'Aucune commande',
+      message: 'Vos demandes de service apparaîtront ici.',
+      actionLabel: 'Réserver un service',
+      onAction: () => context.push('/search'),
     );
   }
 }
@@ -158,10 +147,9 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
                 ),
                 child: Text(
                   _getStatusLabel(request.status).toUpperCase(),
-                  style: TextStyle(
+                  style: AppTextStyles.caption.copyWith(
                     color: statusColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),

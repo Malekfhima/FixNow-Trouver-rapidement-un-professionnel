@@ -42,7 +42,12 @@ class ProRequestsScreen extends ConsumerWidget {
         body: state.isLoading
             ? const RequestCardSkeletonList()
             : state.error != null
-                ? Center(child: Text('Erreur : ${state.error}'))
+                ? ErrorState(
+                    error: state.error,
+                    onRetry: () => ref
+                        .read(proRequestsControllerProvider.notifier)
+                        .loadRequests(),
+                  )
                 : TabBarView(
                     children: [
                       _PendingTab(requests: state.pending),
@@ -400,10 +405,9 @@ class _RequestHeader extends StatelessWidget {
               ),
               child: Text(
                 _statusLabel.toUpperCase(),
-                style: const TextStyle(
+                style: AppTextStyles.caption.copyWith(
                   color: AppColors.primary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),

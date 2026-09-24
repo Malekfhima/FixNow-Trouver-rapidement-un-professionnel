@@ -100,8 +100,11 @@ class ProCardSkeleton extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      SkeletonBox(width: 72, height: 20, radius: AppRadius.xs),
-                      Spacer(),
+                      Expanded(
+                        child: SkeletonBox(
+                            height: 20, radius: AppRadius.xs),
+                      ),
+                      SizedBox(width: AppSpacing.sm),
                       SkeletonBox(width: 44, height: 14, radius: AppRadius.xs),
                     ],
                   ),
@@ -437,7 +440,7 @@ class ProCardSkeletonRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 160,
+      height: 196,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),

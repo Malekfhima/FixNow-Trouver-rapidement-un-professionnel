@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/app_avatar.dart';
 import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/features/chat/chat_controller.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
@@ -71,14 +72,10 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            CircleAvatar(
+            AppAvatar(
+              url: otherAvatar,
               radius: 18,
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              backgroundImage:
-                  otherAvatar != null ? NetworkImage(otherAvatar) : null,
-              child: otherAvatar == null
-                  ? const Icon(Icons.person, color: AppColors.primary, size: 20)
-                  : null,
+              foregroundColor: AppColors.primary,
             ),
             const SizedBox(width: AppSpacing.sm),
             Column(

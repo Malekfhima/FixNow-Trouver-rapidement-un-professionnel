@@ -59,22 +59,27 @@ class AppAlerts {
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
     final cs = Theme.of(context).colorScheme;
-    final semantic = context.semanticColors;
+    // Le toast vit sur `inverseSurface` : fond SOMBRE en mode claire et
+    // fond CLAIR en mode sombre. On prend donc la palette OPPOSÉE à celle
+    // de la page pour que icônes et texte restent lisibles (WCAG AA) dans
+    // les deux modes.
+    final onLightToast = Theme.of(context).brightness == Brightness.dark;
+    final palette = onLightToast ? SemanticColors.light : SemanticColors.dark;
 
     late final Color color;
     late final IconData icon;
     switch (type) {
       case AppAlertType.success:
-        color = semantic.success;
+        color = palette.success;
         icon = Icons.check_circle_rounded;
       case AppAlertType.error:
-        color = cs.error;
+        color = onLightToast ? const Color(0xFFB91C1C) : cs.error;
         icon = Icons.error_rounded;
       case AppAlertType.warning:
-        color = semantic.warning;
+        color = palette.warning;
         icon = Icons.warning_amber_rounded;
       case AppAlertType.info:
-        color = semantic.info;
+        color = palette.info;
         icon = Icons.info_rounded;
     }
 
@@ -233,6 +238,11 @@ class _OfflineBannerState extends State<OfflineBanner> {
   @override
   Widget build(BuildContext context) {
     final semantic = context.semanticColors;
+    // Fond = warning (sombre en clair / clair en sombre) → le texte s'adapte
+    // à la luminance réelle du fond pour rester lisible (AA).
+    final bannerBg = semantic.warning;
+    final onBanner =
+        bannerBg.computeLuminance() > 0.5 ? Colors.black87 : AppColors.white;
     return Stack(
       children: [
         widget.child,
@@ -242,7 +252,7 @@ class _OfflineBannerState extends State<OfflineBanner> {
             left: 0,
             right: 0,
             child: Material(
-              color: semantic.warning,
+              color: bannerBg,
               child: SafeArea(
                 bottom: false,
                 child: Padding(
@@ -251,13 +261,13 @@ class _OfflineBannerState extends State<OfflineBanner> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.wifi_off_rounded,
-                          size: 16, color: Colors.black87),
+                      Icon(Icons.wifi_off_rounded, size: 16, color: onBanner),
                       const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        'Pas de connexion — certaines fonctionnalités sont indisponibles',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: Colors.black87),
+                      Flexible(
+                        child: Text(
+                          'Pas de connexion — certaines fonctionnalités sont indisponibles',
+                          style: AppTextStyles.bodySmall.copyWith(color: onBanner),
+                        ),
                       ),
                     ],
                   ),
@@ -268,6 +278,29 @@ class _OfflineBannerState extends State<OfflineBanner> {
       ],
     );
   }
+}
+
+/// Centre [child] verticalement ; défile si la hauteur disponible est
+/// trop petite (petit écran × grand facteur de zoom texte) — jamais de
+/// RenderFlex overflow, jamais d'écran blanc.
+Widget _centeredScrollable(BuildContext context, Widget child) {
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final padded = Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: child,
+      );
+      if (!constraints.maxHeight.isFinite) {
+        return Center(child: padded);
+      }
+      return SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: padded,
+        ),
+      );
+    },
+  );
 }
 
 /// Empty state with icon, title, description and optional action.
@@ -290,38 +323,37 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 64, color: cs.onSurfaceVariant),
-            const SizedBox(height: AppSpacing.lg),
+    return _centeredScrollable(
+      context,
+      Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 64, color: cs.onSurfaceVariant),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.h4.copyWith(color: cs.onSurface),
+          ),
+          if (message != null) ...[
+            const SizedBox(height: AppSpacing.sm),
             Text(
-              title,
+              message!,
               textAlign: TextAlign.center,
-              style: AppTextStyles.h4.copyWith(color: cs.onSurface),
+              style: AppTextStyles.bodyMedium
+                  .copyWith(color: cs.onSurfaceVariant),
             ),
-            if (message != null) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                message!,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.bodyMedium
-                    .copyWith(color: cs.onSurfaceVariant),
-              ),
-            ],
-            if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton.icon(
-                onPressed: onAction,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: Text(actionLabel!),
-              ),
-            ],
           ],
-        ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            FilledButton.icon(
+              onPressed: onAction,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: Text(actionLabel!),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -337,34 +369,39 @@ class ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.cloud_off_rounded, size: 64, color: cs.onSurfaceVariant),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              'Oups, une erreur est survenue',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.h4.copyWith(color: cs.onSurface),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              error != null ? ErrorMapper.message(error!) : '',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium
-                  .copyWith(color: cs.onSurfaceVariant),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Réessayer'),
-            ),
-          ],
-        ),
+    return _centeredScrollable(
+      context,
+      Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.cloud_off_rounded, size: 64, color: cs.onSurfaceVariant),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Oups, une erreur est survenue',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.h4.copyWith(color: cs.onSurface),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            // Une String déjà « mappée » par un contrôleur est affichée
+            // telle quelle ; un objet brut passe par ErrorMapper.
+            error == null
+                ? ''
+                : error is String
+                    ? error as String
+                    : ErrorMapper.message(error!),
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMedium
+                .copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Réessayer'),
+          ),
+        ],
       ),
     );
   }

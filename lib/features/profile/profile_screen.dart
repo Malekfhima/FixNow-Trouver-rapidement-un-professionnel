@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/core/widgets/app_alerts.dart';
+import 'package:fixnow/core/widgets/app_avatar.dart';
 import 'package:fixnow/features/auth/auth_controller.dart';
 import 'package:fixnow/features/home/home_controller.dart';
 import 'package:fixnow/core/theme/theme_mode_controller.dart';
@@ -27,15 +28,10 @@ class ProfileScreen extends ConsumerWidget {
         child: Column(
           children: [
             // Avatar & name
-            CircleAvatar(
+            AppAvatar(
+              url: user.valueOrNull?.avatarUrl,
               radius: 40,
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              backgroundImage: user.valueOrNull?.avatarUrl != null
-                  ? NetworkImage(user.valueOrNull!.avatarUrl!)
-                  : null,
-              child: user.valueOrNull?.avatarUrl == null
-                  ? const Icon(Icons.person, color: AppColors.primary, size: 40)
-                  : null,
+              foregroundColor: AppColors.primary,
             ),
             const SizedBox(height: AppSpacing.md),
             Text(user.valueOrNull?.name ?? 'Utilisateur', style: AppTextStyles.h3),

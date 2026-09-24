@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
-import 'package:fixnow/features/notifications/notifications_controller.dart';
+import 'package:fixnow/features/chat/chat_controller.dart';
 
 /// Custom bottom navigation bar matching the FixNow design.
 class BottomNavBar extends ConsumerWidget {
@@ -16,8 +16,9 @@ class BottomNavBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Real unread notifications count (0 hides the badge).
-    final unread = ref.watch(unreadNotificationsCountProvider);
+    // Compteur réel : messages non lus (onglet Chat). Les notifications
+    // non lues ont leur propre badge sur la cloche de l'accueil.
+    final unreadMessages = ref.watch(unreadMessagesCountProvider);
     final colors = Theme.of(context).colorScheme;
 
     return Container(
@@ -51,13 +52,13 @@ class BottomNavBar extends ConsumerWidget {
                 label: 'Chat',
                 isActive: currentIndex == 1,
                 onTap: () => onTap(1),
+                badge: _formatBadge(unreadMessages.valueOrNull),
               ),
               _NavItem(
                 icon: Icons.receipt_long_rounded,
                 label: 'Commandes',
                 isActive: currentIndex == 2,
                 onTap: () => onTap(2),
-                badge: unread > 0 ? (unread > 9 ? 9 : unread) : null,
               ),
               _NavItem(
                 icon: Icons.person_rounded,
@@ -71,6 +72,12 @@ class BottomNavBar extends ConsumerWidget {
       ),
     );
   }
+
+  /// "12" / « 99+ » — masqué à 0 (le badge disparaît).
+  static String? _formatBadge(int? count) {
+    if (count == null || count <= 0) return null;
+    return count > 99 ? '99+' : '$count';
+  }
 }
 
 class _NavItem extends StatelessWidget {
@@ -78,7 +85,7 @@ class _NavItem extends StatelessWidget {
   final String label;
   final bool isActive;
   final VoidCallback onTap;
-  final int? badge;
+  final String? badge;
 
   const _NavItem({
     required this.icon,
@@ -119,26 +126,25 @@ class _NavItem extends StatelessWidget {
                       ? colors.onPrimary
                       : colors.onSurfaceVariant,
                   size: 24,
-                ),
-                if (badge != null)
+                ),                if (badge != null)
                   Positioned(
-                    right: -8,
-                    top: -4,
+                    right: -10,
+                    top: -6,
                     child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: AppColors.accent,
-                        shape: BoxShape.circle,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: context.semanticColors.accent,
+                        borderRadius: AppRadius.fullAll,
                       ),
-                    child: Text(
-                      '$badge',
-                      style: TextStyle(
-                        color: colors.onPrimary,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        height: 1,
+                      child: Text(
+                        badge!,
+                        style: AppTextStyles.caption.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                        ),
                       ),
-                    ),
                     ),
                   ),
               ],
@@ -154,7 +160,6 @@ class _NavItem extends StatelessWidget {
                   ? colors.primary
                   : colors.onSurfaceVariant,
               fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-              fontSize: 10,
             ),
           ),
         ],

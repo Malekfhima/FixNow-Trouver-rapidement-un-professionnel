@@ -52,6 +52,15 @@ class ChatListController extends StateNotifier<ChatListState> {
   final Ref _ref;
 
   ChatListController(this._ref) : super(const ChatListState()) {
+    // La session peut n'être résolue qu'APRÈS la construction du
+    // contrôleur (authStateChanges asynchrone) : sans ce listener, la
+    // liste restait figée sur « vide » au premier lancement.
+    _ref.listen<String?>(
+      currentUserProvider.select((u) => u?.uid),
+      (previous, next) {
+        if (previous == null && next != null) loadChats();
+      },
+    );
     loadChats();
   }
 
@@ -80,6 +89,18 @@ class ChatListController extends StateNotifier<ChatListState> {
 final chatListControllerProvider =
     StateNotifierProvider<ChatListController, ChatListState>((ref) {
   return ChatListController(ref);
+});
+
+/// Nombre total de MESSAGES non lus pour l'utilisateur courant —
+/// sert au badge de l'onglet Chat de la barre de navigation.
+final unreadMessagesCountProvider = StreamProvider<int>((ref) {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) return Stream.value(0);
+  return ref
+      .watch(firestoreServiceProvider)
+      .userChatsStream(user.uid)
+      .map((chats) =>
+          chats.fold<int>(0, (total, c) => total + c.unreadFor(user.uid)));
 });
 
 /// Provides the currently selected chat (by id).
