@@ -3,42 +3,88 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // ── Avatars ────────────────────────────────────────────────
-    // Read: any authenticated user
-    // Write: only the owner, image/*, max 5 MB
+    // ── Helpers ────────────────────────────────────────────────
+    // NB : `request.resource` vaut NULL pour une lecture (read) et une
+    // suppression (delete) — il n'est JAMAIS utilisé dans ces deux cas,
+    // sinon l'évaluation de la règle échoue et refuse à tort.
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Valide le contenu UNIQUEMENT lors d'une écriture (create / update).
+    function isImagePayload() {
+      return request.resource != null
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // Le client ou le pro assigné à une demande de service.
+    function isRequestParticipant(requestId) {
+      return isAuthenticated()
+        && firestore.get(/databases/(default)/documents/serviceRequests/$(requestId)).data.clientId == request.auth.uid
+        || isAuthenticated()
+        && firestore.get(/databases/(default)/documents/serviceRequests/$(requestId)).data.proId == request.auth.uid;
+    }
+
+    // Un participant de la conversation (client ou pro du chat).
+    function isChatParticipant(chatId) {
+      return isAuthenticated()
+        && firestore.get(/databases/(default)/documents/chats/$(chatId)).data.clientId == request.auth.uid
+        || isAuthenticated()
+        && firestore.get(/databases/(default)/documents/chats/$(chatId)).data.proId == request.auth.uid;
+    }
+
+    // ── Avatars : avatars/{uid} ────────────────────────────────
+    // read   : tout utilisateur connecté
+    // create : propriétaire uniquement, image/*, < 5 Mo
+    // update : propriétaire uniquement (remplacement du même fichier)
+    // delete : propriétaire uniquement (aucun request.resource ici)
     match /avatars/{uid} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-                    && request.auth.uid == uid
-                    && request.resource.contentType.matches('image/.*')
-                    && request.resource.size < 5 * 1024 * 1024;
+      allow read: if isAuthenticated();
+
+      allow create, update: if isAuthenticated()
+        && request.auth.uid == uid
+        && isImagePayload();
+
+      allow delete: if isAuthenticated()
+        && request.auth.uid == uid;
     }
 
-    // ── Gallery ────────────────────────────────────────────────
-    // Read: any authenticated user
-    // Write: only the owner, image/*, max 5 MB
-    match /gallery/{uid}/{file} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-                    && request.auth.uid == uid
-                    && request.resource.contentType.matches('image/.*')
-                    && request.resource.size < 5 * 1024 * 1024;
+    // ── Galerie pro : gallery/{uid}/{file} ─────────────────────
+    // read   : tout utilisateur connecté (vitrine du pro)
+    // create/update/delete : propriétaire uniquement
+    match /gallery/{uid}/{allPaths=**} {
+      allow read: if isAuthenticated();
+
+      allow create, update: if isAuthenticated()
+        && request.auth.uid == uid
+        && isImagePayload();
+
+      allow delete: if isAuthenticated()
+        && request.auth.uid == uid;
     }
 
-    // ── Request photos ─────────────────────────────────────────
-    // Read & write: any authenticated user (client uploads for their request)
-    match /requests/{requestId}/{file} {
-      allow read, write: if request.auth != null
-                          && request.resource.contentType.matches('image/.*')
-                          && request.resource.size < 5 * 1024 * 1024;
+    // ── Photos d'une demande : requests/{requestId}/{file} ──────
+    // Lecture ET écriture réservées au client émetteur ou au pro
+    // assigné, vérifiés via Firestore (firestore.get).
+    match /requests/{requestId}/{allPaths=**} {
+      allow read: if isRequestParticipant(requestId);
+
+      allow create, update: if isRequestParticipant(requestId)
+        && isImagePayload();
+
+      allow delete: if isRequestParticipant(requestId);
     }
 
-    // ── Chat images ────────────────────────────────────────────
-    // Read & write: any authenticated user (both participants may send)
-    match /chats/{chatId}/{file} {
-      allow read, write: if request.auth != null
-                          && request.resource.contentType.matches('image/.*')
-                          && request.resource.size < 5 * 1024 * 1024;
+    // ── Images de discussion : chats/{chatId}/{file} ───────────
+    // Lecture ET écriture réservées aux deux participants du chat.
+    match /chats/{chatId}/{allPaths=**} {
+      allow read: if isChatParticipant(chatId);
+
+      allow create, update: if isChatParticipant(chatId)
+        && isImagePayload();
+
+      allow delete: if isChatParticipant(chatId);
     }
   }
 }

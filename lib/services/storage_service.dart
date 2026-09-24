@@ -8,6 +8,11 @@ import 'package:image_picker/image_picker.dart';
 class StorageService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
+  /// Limite miroir de storage.rules : 5 Mo.
+  /// Vérifiée côté client pour renvoyer un message clair plutôt qu'un
+  /// `permission-denied` obscur en fin d'upload.
+  static const int maxFileSizeBytes = 5 * 1024 * 1024;
+
   /// Uploads an image file and returns its download URL.
   /// Uses [putData] (bytes) so it works on web.
   Future<String> uploadFile({
@@ -17,6 +22,13 @@ class StorageService {
   }) async {
     final ref = _storage.ref().child(path);
     final bytes = await file.readAsBytes();
+    if (bytes.length > maxFileSizeBytes) {
+      throw FirebaseException(
+        plugin: 'firebase_storage',
+        code: 'image-too-large',
+        message: 'Image trop lourde : 5 Mo maximum.',
+      );
+    }
     final metadata = SettableMetadata(contentType: contentType);
     await ref.putData(bytes, metadata);
     return await ref.getDownloadURL();
