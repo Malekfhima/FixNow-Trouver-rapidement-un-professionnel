@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/widgets/outline_button.dart';
+import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/features/professional_profile/pro_profile_controller.dart';
 import 'package:fixnow/models/review_model.dart';
 import 'package:intl/intl.dart';
@@ -20,7 +21,7 @@ class ProProfileScreen extends ConsumerWidget {
     if (state.isLoading) {
       return Scaffold(
         backgroundColor: Theme.of(context).colorScheme.surface,
-        body: const Center(child: CircularProgressIndicator()),
+        body: const ProProfileSkeleton(),
       );
     }
 
@@ -199,9 +200,13 @@ class ProProfileScreen extends ConsumerWidget {
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.xl),
-                      const Text('Réalisations', style: AppTextStyles.h4),
-                      const SizedBox(height: AppSpacing.md),
+                      // Titre masqué quand il n'y a pas de photos :
+                      // évite un grand vide entre « À propos » et « Avis ».
+                      if (pro.gallery.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.xl),
+                        const Text('Réalisations', style: AppTextStyles.h4),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
                     ],
                   ),
                 ),
@@ -293,6 +298,9 @@ class ProProfileScreen extends ConsumerWidget {
                     child: OutlineButton(
                       label: 'Message',
                       isExpanded: true,
+                      // Même hauteur que le bouton principal (52) pour
+                      // que la barre soit alignée.
+                      height: 52,
                       onPressed: () => context.push('/chat/new?proId=$proId'),
                     ),
                   ),

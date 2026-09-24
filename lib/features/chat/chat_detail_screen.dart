@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/features/chat/chat_controller.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 import 'package:fixnow/models/chat_model.dart';
@@ -101,9 +102,42 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
         children: [
           Expanded(
             child: state.isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const MessageBubblesSkeleton()
                 : state.error != null
-                    ? Center(child: Text('Erreur: ${state.error}'))
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.xl),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.cloud_off_rounded,
+                                size: 48,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              Text(
+                                'Erreur : ${state.error}',
+                                textAlign: TextAlign.center,
+                                style: AppTextStyles.bodyMedium,
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                              OutlinedButton.icon(
+                                onPressed: () => ref
+                                    .read(chatDetailControllerProvider(
+                                            widget.chatId)
+                                        .notifier)
+                                    .loadChat(),
+                                icon: const Icon(Icons.refresh_rounded,
+                                    size: 18),
+                                label: const Text('Réessayer'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
                     : state.messages.isEmpty
                         ? const Center(
                             child: Text(

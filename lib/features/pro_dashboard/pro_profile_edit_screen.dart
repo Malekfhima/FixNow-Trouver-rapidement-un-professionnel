@@ -1,7 +1,7 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/core/widgets/app_alerts.dart';
@@ -9,6 +9,7 @@ import 'package:fixnow/core/constants/app_constants.dart';
 import 'package:fixnow/services/storage_service.dart';
 import 'package:fixnow/core/utils/validators.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
+import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 import 'package:fixnow/services/firestore_service.dart';
 
@@ -54,7 +55,7 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
   final Set<String> _selectedCategories = {};
   final Set<String> _availableDays = {};
   final List<String> _galleryUrls = [];
-  final List<File> _newGalleryFiles = [];
+  final List<XFile> _newGalleryFiles = [];
   bool _isLoading = true;
   bool _isSaving = false;
   String? _loadError;
@@ -90,8 +91,9 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
       setState(() {
         _bioController.text = pro?.bio ?? '';
         _cityController.text = pro?.city ?? '';
-        _rateController.text =
-            pro != null && pro.hourlyRate > 0 ? pro.hourlyRate.toStringAsFixed(0) : '';
+        _rateController.text = pro != null && pro.hourlyRate > 0
+            ? pro.hourlyRate.toStringAsFixed(0)
+            : '';
         _selectedCategories.addAll(pro?.categories ?? []);
         _galleryUrls.addAll(pro?.gallery ?? []);
         final availability = pro?.availability;
@@ -119,12 +121,12 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
     );
     if (picked.isEmpty) return;
     setState(() {
-      _newGalleryFiles.addAll(picked.map((x) => File(x.path)));
+      _newGalleryFiles.addAll(picked);
       final total = _galleryUrls.length + _newGalleryFiles.length;
       if (total > AppConstants.maxGalleryPhotos) {
-        _newGalleryFiles
-            .removeRange(_newGalleryFiles.length - (total - AppConstants.maxGalleryPhotos),
-                _newGalleryFiles.length);
+        _newGalleryFiles.removeRange(
+            _newGalleryFiles.length - (total - AppConstants.maxGalleryPhotos),
+            _newGalleryFiles.length);
       }
     });
   }
@@ -169,7 +171,6 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // Upload new gallery photos first (compressed by the picker).
       final storage = ref.read(storageServiceProvider);
       final uploaded = <String>[];
       for (var i = 0; i < _newGalleryFiles.length; i++) {
@@ -182,7 +183,8 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
       }
       final fullGallery = [..._galleryUrls, ...uploaded];
       if (fullGallery.length > AppConstants.maxGalleryPhotos) {
-        fullGallery.removeRange(AppConstants.maxGalleryPhotos, fullGallery.length);
+        fullGallery.removeRange(
+            AppConstants.maxGalleryPhotos, fullGallery.length);
       }
 
       await ref.read(firestoreServiceProvider).updateProfessional(uid, {
@@ -215,7 +217,7 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
         foregroundColor: Theme.of(context).colorScheme.onSurface,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const FormSkeleton()
           : _loadError != null
               ? Center(child: Text('Erreur : $_loadError'))
               : SingleChildScrollView(
@@ -238,10 +240,13 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                               label: Text(category),
                               selected: selected,
                               onSelected: (v) => setState(() {
-                                v ? _selectedCategories.add(category)
-                                  : _selectedCategories.remove(category);
+                                v
+                                    ? _selectedCategories.add(category)
+                                    : _selectedCategories.remove(category);
                               }),
-                              selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                              selectedColor: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer,
                               checkmarkColor: AppColors.primary,
                             );
                           }).toList(),
@@ -249,12 +254,12 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                         const SizedBox(height: AppSpacing.xl),
 
                         // ── City ────────────────────────────────────
-                        const Text('Zone d\'intervention', style: AppTextStyles.h4),
+                        const Text('Zone d\'intervention',
+                            style: AppTextStyles.h4),
                         const SizedBox(height: AppSpacing.md),
                         TextFormField(
                           controller: _cityController,
-                          validator: (v) =>
-                              Validators.required(v, 'La ville'),
+                          validator: (v) => Validators.required(v, 'La ville'),
                           decoration: const InputDecoration(
                             hintText: 'Ville ou zone (ex : Paris 11e)',
                             prefixIcon: Icon(Icons.location_on_outlined),
@@ -263,15 +268,16 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                         const SizedBox(height: AppSpacing.xl),
 
                         // ── Hourly rate ─────────────────────────────
-                        const Text('Tarif horaire (€)', style: AppTextStyles.h4),
+                        const Text('Tarif horaire (€)',
+                            style: AppTextStyles.h4),
                         const SizedBox(height: AppSpacing.md),
                         TextFormField(
                           controller: _rateController,
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true),
                           validator: (v) {
-                            final value =
-                                double.tryParse(v?.replaceAll(',', '.') ?? '');
+                            final value = double.tryParse(
+                                v?.replaceAll(',', '.') ?? '');
                             if (value == null || value <= 0) {
                               return 'Tarif invalide';
                             }
@@ -290,7 +296,8 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                         TextFormField(
                           controller: _bioController,
                           maxLines: 5,
-                          validator: (v) => Validators.minLength(v, 20, 'La présentation'),
+                          validator: (v) =>
+                              Validators.minLength(v, 20, 'La présentation'),
                           decoration: const InputDecoration(
                             hintText:
                                 'Décrivez votre expérience, vos spécialités…',
@@ -310,10 +317,13 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                               label: Text(day),
                               selected: selected,
                               onSelected: (v) => setState(() {
-                                v ? _availableDays.add(day)
-                                  : _availableDays.remove(day);
+                                v
+                                    ? _availableDays.add(day)
+                                    : _availableDays.remove(day);
                               }),
-                              selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                              selectedColor: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer,
                               checkmarkColor: AppColors.primary,
                             );
                           }).toList(),
@@ -323,7 +333,8 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                         // ── Gallery ───────────────────────────────
                         Row(
                           children: [
-                            const Text('Galerie de réalisations', style: AppTextStyles.h4),
+                            const Text('Galerie de réalisations',
+                                style: AppTextStyles.h4),
                             const Spacer(),
                             TextButton.icon(
                               onPressed: _galleryUrls.length +
@@ -331,7 +342,8 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                                       AppConstants.maxGalleryPhotos
                                   ? null
                                   : _pickGalleryPhotos,
-                              icon: const Icon(Icons.add_photo_alternate_outlined,
+                              icon: const Icon(
+                                  Icons.add_photo_alternate_outlined,
                                   size: 18),
                               label: Text(
                                   '${_galleryUrls.length + _newGalleryFiles.length}/${AppConstants.maxGalleryPhotos}'),
@@ -341,7 +353,8 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                         const SizedBox(height: AppSpacing.sm),
                         SizedBox(
                           height: 96,
-                          child: (_galleryUrls.isEmpty && _newGalleryFiles.isEmpty)
+                          child: (_galleryUrls.isEmpty &&
+                                  _newGalleryFiles.isEmpty)
                               ? const Text(
                                   'Montrez vos réalisations : cela rassure les clients.',
                                   style: AppTextStyles.caption,
@@ -349,7 +362,9 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                               : ListView(
                                   scrollDirection: Axis.horizontal,
                                   children: [
-                                    for (var i = 0; i < _galleryUrls.length; i++)
+                                    for (var i = 0;
+                                        i < _galleryUrls.length;
+                                        i++)
                                       _galleryThumb(
                                         child: Image.network(
                                           _galleryUrls[i],
@@ -357,19 +372,20 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                                           height: 96,
                                           fit: BoxFit.cover,
                                         ),
-                                        onRemove: () =>
-                                            setState(() => _galleryUrls.removeAt(i)),
+                                        onRemove: () => setState(
+                                            () => _galleryUrls.removeAt(i)),
                                       ),
-                                    for (var i = 0; i < _newGalleryFiles.length; i++)
+                                    for (var i = 0;
+                                        i < _newGalleryFiles.length;
+                                        i++)
                                       _galleryThumb(
-                                        child: Image.file(
-                                          _newGalleryFiles[i],
+                                        child: _XFileThumb(
+                                          file: _newGalleryFiles[i],
                                           width: 96,
                                           height: 96,
-                                          fit: BoxFit.cover,
                                         ),
-                                        onRemove: () => setState(
-                                            () => _newGalleryFiles.removeAt(i)),
+                                        onRemove: () => setState(() =>
+                                            _newGalleryFiles.removeAt(i)),
                                       ),
                                   ],
                                 ),
@@ -386,6 +402,49 @@ class _ProProfileEditScreenState extends ConsumerState<ProProfileEditScreen> {
                     ),
                   ),
                 ),
+    );
+  }
+}
+
+/// Cross-platform image thumbnail from an [XFile].
+class _XFileThumb extends StatelessWidget {
+  final XFile file;
+  final double width;
+  final double height;
+
+  const _XFileThumb({
+    required this.file,
+    required this.width,
+    required this.height,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List>(
+      future: file.readAsBytes(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done &&
+            snapshot.hasData) {
+          return Image.memory(
+            snapshot.data!,
+            width: width,
+            height: height,
+            fit: BoxFit.cover,
+          );
+        }
+        return Container(
+          width: width,
+          height: height,
+          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          child: const Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      },
     );
   }
 }

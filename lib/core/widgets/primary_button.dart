@@ -55,7 +55,18 @@ class PrimaryButton extends StatelessWidget {
                   icon!,
                   const SizedBox(width: AppSpacing.sm),
                 ],
-                Text(label),
+                // Le libellé se rétrécit au lieu de déborder du bouton
+                // (ex. « Réserver maintenant » dans la barre du profil pro).
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      softWrap: false,
+                    ),
+                  ),
+                ),
               ],
             ),
     );

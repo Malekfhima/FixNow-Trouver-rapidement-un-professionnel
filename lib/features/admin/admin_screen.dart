@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
+import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/features/admin/admin_controller.dart';
 import 'package:fixnow/models/professional_model.dart';
 
@@ -49,7 +51,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
         ),
       ),
       body: state.isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const RequestCardSkeletonList(
+              padding: EdgeInsets.all(AppSpacing.lg),
+              spacing: AppSpacing.md,
+            )
           : state.error != null
               ? Center(
                   child: Padding(
@@ -384,8 +389,46 @@ class _ReportsTab extends ConsumerWidget {
                 );
               },
             ),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Erreur : $e')),
+      loading: () => const RequestCardSkeletonList(
+        padding: EdgeInsets.all(AppSpacing.lg),
+        spacing: AppSpacing.md,
+      ),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.cloud_off_rounded,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                'Erreur de chargement',
+                style: AppTextStyles.h4.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                ErrorMapper.message(e),
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              FilledButton.icon(
+                onPressed: () => ref.invalidate(_openReportsProvider),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Réessayer'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/core/widgets/pro_card.dart';
+import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/features/search/search_controller.dart';
 import 'package:fixnow/models/professional_model.dart';
 
@@ -107,74 +108,66 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
             ),
           ),
 
-          // Filters bar: sort + min rating + max price
-          Padding(
+          // Filters bar: sort + min rating + max price (scrollable)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
             child: Row(
               children: [
-                // Sort selector
-                Expanded(
-                  child: DropdownButtonFormField<SearchSort>(
-                    initialValue: searchState.sort,
-                    decoration: const InputDecoration(
-                      labelText: 'Trier par',
-                      prefixIcon: Icon(Icons.sort_rounded),
-                      isDense: true,
+                _FilterDropdown<SearchSort>(
+                  value: searchState.sort,
+                  label: 'Trier par',
+                  icon: Icons.sort_rounded,
+                  width: 200,
+                  items: const [
+                    DropdownMenuItem(
+                      value: SearchSort.rating,
+                      child: Text('Meilleures notes', maxLines: 1, overflow: TextOverflow.ellipsis),
                     ),
-                    items: const [
-                      DropdownMenuItem(
-                          value: SearchSort.rating, child: Text('Meilleures notes')),
-                      DropdownMenuItem(
-                          value: SearchSort.priceAsc, child: Text('Prix croissant')),
-                      DropdownMenuItem(
-                          value: SearchSort.priceDesc, child: Text('Prix décroissant')),
-                    ],
-                    onChanged: (v) => ref
-                        .read(searchControllerProvider.notifier)
-                        .applyFilters(sort: v),
-                  ),
+                    DropdownMenuItem(
+                      value: SearchSort.priceAsc,
+                      child: Text('Prix croissant', maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                    DropdownMenuItem(
+                      value: SearchSort.priceDesc,
+                      child: Text('Prix décroissant', maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                  onChanged: (v) => ref
+                      .read(searchControllerProvider.notifier)
+                      .applyFilters(sort: v),
                 ),
                 const SizedBox(width: AppSpacing.md),
-                // Min rating
-                Expanded(
-                  child: DropdownButtonFormField<double>(
-                    initialValue: searchState.minRating,
-                    decoration: const InputDecoration(
-                      labelText: 'Note min.',
-                      prefixIcon: Icon(Icons.star_rounded),
-                      isDense: true,
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 0.0, child: Text('Toutes')),
-                      DropdownMenuItem(value: 3.0, child: Text('3+ ★')),
-                      DropdownMenuItem(value: 4.0, child: Text('4+ ★')),
-                      DropdownMenuItem(value: 4.5, child: Text('4.5+ ★')),
-                    ],
-                    onChanged: (v) => ref
-                        .read(searchControllerProvider.notifier)
-                        .applyFilters(minRating: v ?? 0),
-                  ),
+                _FilterDropdown<double>(
+                  value: searchState.minRating,
+                  label: 'Note min.',
+                  icon: Icons.star_rounded,
+                  width: 140,
+                  items: const [
+                    DropdownMenuItem(value: 0.0, child: Text('Toutes', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 3.0, child: Text('3+ ★', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 4.0, child: Text('4+ ★', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 4.5, child: Text('4.5+ ★', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: (v) => ref
+                      .read(searchControllerProvider.notifier)
+                      .applyFilters(minRating: v ?? 0),
                 ),
                 const SizedBox(width: AppSpacing.md),
-                // Max price
-                Expanded(
-                  child: DropdownButtonFormField<double>(
-                    initialValue: searchState.maxPrice,
-                    decoration: const InputDecoration(
-                      labelText: 'Prix max',
-                      prefixIcon: Icon(Icons.euro_rounded),
-                      isDense: true,
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: null, child: Text('Tous')),
-                      DropdownMenuItem(value: 30, child: Text('≤ 30 €')),
-                      DropdownMenuItem(value: 50, child: Text('≤ 50 €')),
-                      DropdownMenuItem(value: 75, child: Text('≤ 75 €')),
-                    ],
-                    onChanged: (v) => ref
-                        .read(searchControllerProvider.notifier)
-                        .applyFilters(maxPrice: v),
-                  ),
+                _FilterDropdown<double?>(
+                  value: searchState.maxPrice,
+                  label: 'Prix max',
+                  icon: Icons.euro_rounded,
+                  width: 140,
+                  items: const [
+                    DropdownMenuItem<double?>(value: null, child: Text('Tous', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem<double?>(value: 30, child: Text('≤ 30 €', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem<double?>(value: 50, child: Text('≤ 50 €', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem<double?>(value: 75, child: Text('≤ 75 €', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: (v) => ref
+                      .read(searchControllerProvider.notifier)
+                      .applyFilters(maxPrice: v),
                 ),
               ],
             ),
@@ -199,7 +192,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
           // Results
           Expanded(
             child: searchState.isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const ProCardSkeletonList()
                 : searchState.error != null
                     ? Center(
                         child: Column(
@@ -319,5 +312,52 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
       return Color.lerp(base, Colors.black, 0.65)!;
     }
     return base;
+  }
+}
+
+/// Compact filter dropdown with fixed width, dense layout and small icon.
+class _FilterDropdown<T> extends StatelessWidget {
+  final T value;
+  final String label;
+  final IconData icon;
+  final double width;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?>? onChanged;
+
+  const _FilterDropdown({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.width,
+    required this.items,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: DropdownButtonFormField<T>(
+        key: ValueKey(value),
+        initialValue: value,
+        isExpanded: true,
+        isDense: true,
+        items: items,
+        onChanged: onChanged,
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.sm,
+          ),
+          prefixIcon: Icon(icon, size: 18),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 32,
+            minHeight: 0,
+          ),
+        ),
+      ),
+    );
   }
 }

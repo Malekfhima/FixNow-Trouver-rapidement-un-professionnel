@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
+import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 import 'package:fixnow/services/firestore_service.dart';
 import 'package:fixnow/models/user_model.dart';
@@ -33,7 +35,7 @@ class AuthController extends StateNotifier<AuthState> {
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: ErrorMapper.message(e));
       return false;
     }
   }
@@ -77,12 +79,21 @@ class AuthController extends StateNotifier<AuthState> {
         
         // Update Firebase display name
         await _authService.updateDisplayName(name);
+
+        // Email de vérification (best-effort) : sans cet appel, Firebase
+        // n'envoie AUCUN email à l'inscription — d'où « je ne reçois pas
+        // l'email » avec une adresse Gmail.
+        try {
+          await credential.user?.sendEmailVerification();
+        } catch (verifyError) {
+          debugPrint('sendEmailVerification failed: $verifyError');
+        }
       }
       
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: ErrorMapper.message(e));
       return false;
     }
   }
@@ -132,7 +143,7 @@ class AuthController extends StateNotifier<AuthState> {
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: ErrorMapper.message(e));
       return false;
     }
   }
@@ -144,6 +155,14 @@ class AuthController extends StateNotifier<AuthState> {
       
       if (credential.user != null) {
         // Check if user already exists in Firestore
+        // Email de vérification si Google n'a pas encore validé l'adresse.
+        try {
+          if (credential.user != null && !credential.user!.emailVerified) {
+            await credential.user!.sendEmailVerification();
+          }
+        } catch (verifyError) {
+          debugPrint('sendEmailVerification failed: $verifyError');
+        }
         final existingUser = await _firestoreService.getUser(credential.user!.uid);
         if (existingUser == null) {
           // Create new user profile
@@ -162,7 +181,7 @@ class AuthController extends StateNotifier<AuthState> {
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: ErrorMapper.message(e));
       return false;
     }
   }
@@ -175,7 +194,7 @@ class AuthController extends StateNotifier<AuthState> {
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: ErrorMapper.message(e));
       return false;
     }
   }
@@ -188,7 +207,7 @@ class AuthController extends StateNotifier<AuthState> {
       await _authService.signOut();
       state = state.copyWith(isLoading: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: ErrorMapper.message(e));
     }
   }
 }

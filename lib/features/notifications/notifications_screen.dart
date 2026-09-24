@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/features/notifications/notifications_controller.dart';
 import 'package:fixnow/models/notification_model.dart';
 
@@ -67,8 +69,8 @@ class NotificationsScreen extends ConsumerWidget {
                   },
                 ),
               ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Erreur : $e')),
+        loading: () => const NotificationSkeletonList(),
+        error: (e, _) => Center(child: Text(ErrorMapper.message(e))),
       ),
     );
   }

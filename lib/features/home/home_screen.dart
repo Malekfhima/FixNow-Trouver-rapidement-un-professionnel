@@ -4,9 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/core/widgets/service_icon_card.dart';
 import 'package:fixnow/core/widgets/pro_card.dart';
+import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/features/home/home_controller.dart';
 import 'package:fixnow/features/notifications/notifications_controller.dart';
-import 'package:shimmer/shimmer.dart';
 
 /// Client Home screen — reproduces the main layout from the mockups.
 class HomeScreen extends ConsumerWidget {
@@ -400,7 +400,7 @@ class HomeScreen extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         if (state.isLoading)
-          _buildShimmerList(context)
+          const ProCardSkeletonRow()
         else if (state.error != null)
           Center(child: Text('Erreur: ${state.error}'))
         else if (state.popularPros.isEmpty)
@@ -440,32 +440,6 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
       ],
-    );
-  }
-
-  Widget _buildShimmerList(BuildContext context) {
-    return SizedBox(
-      height: 160,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-        itemCount: 3,
-        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.lg),
-        itemBuilder: (_, __) {
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          return Shimmer.fromColors(
-            baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
-            highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
-            child: Container(
-              width: 300,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: AppRadius.lgAll,
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 

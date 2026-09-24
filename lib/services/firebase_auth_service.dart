@@ -109,7 +109,19 @@ class FirebaseAuthService {
   }
 
   Future<void> sendPasswordResetEmail(String email) async {
-    await _auth.sendPasswordResetEmail(email: email);
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+    } on FirebaseAuthException catch (e) {
+      // Un compte créé via Google n'a pas de mot de passe : Firebase
+      // répond invalid-credential — on give un message explicite.
+      if (e.code == 'invalid-credential' || e.code == 'missing-password') {
+        throw FirebaseAuthException(
+          code: 'google-account',
+          message: 'Ce compte utilise la connexion Google.',
+        );
+      }
+      rethrow;
+    }
   }
 
   /// Signs the user out. Firebase Auth first (the part that really

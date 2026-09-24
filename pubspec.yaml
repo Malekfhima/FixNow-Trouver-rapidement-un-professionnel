@@ -61,6 +61,7 @@ dev_dependencies:
   build_runner: ^2.4.9
   riverpod_generator: ^2.4.0
   firebase_auth_mocks: ^0.14.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
@@ -83,3 +84,30 @@ flutter:
   #         weight: 600
   #       - asset: assets/fonts/Poppins-Bold.ttf
   #         weight: 700
+
+# App launcher icon — generated from assets/icon/fixnow_icon.png
+# (source keeps transparent margins; *_full.png is the opaque composite
+# produced by tool/make_icon_bg.mjs). Regenerate with:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/fixnow_icon_full.png"
+  # Adaptive icon : artwork pleine page, sans inset (logo déjà centré).
+  adaptive_icon_background: "assets/icon/fixnow_icon_full.png"
+  adaptive_icon_foreground: "assets/icon/fixnow_icon.png"
+  adaptive_icon_foreground_inset: 0
+  remove_alpha_ios: true
+  background_color_ios: "#0248BE"
+  web:
+    generate: true
+    image_path: "assets/icon/fixnow_icon_full.png"
+    background_color: "#0248BE"
+    theme_color: "#0248BE"
+  windows:
+    generate: true
+    image_path: "assets/icon/fixnow_icon_full.png"
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: "assets/icon/fixnow_icon_full.png"

@@ -75,6 +75,7 @@ class SeedService {
         bio:
             'DONNÉES DE DÉMONSTRATION. Plombier certifié (fictif), 8 ans d\'expérience, spécialiste rénovation de salle de bain et dépannage urgent.',
         hourlyRate: 45,
+        status: ProStatus.approved,
         createdAt: DateTime(2026, 1, 1)),
     Professional(
         uid: 'demo-pro-2',
@@ -84,6 +85,7 @@ class SeedService {
         bio:
             'DONNÉES DE DÉMONSTRATION. Électricienne fictive, mise aux normes, tableaux et dépannage.',
         hourlyRate: 50,
+        status: ProStatus.approved,
         createdAt: DateTime(2026, 1, 1)),
     Professional(
         uid: 'demo-pro-3',
@@ -93,6 +95,7 @@ class SeedService {
         bio:
             'DONNÉES DE DÉMONSTRATION. Menuisier-serrurier fictif, portes, fenêtres et serrures.',
         hourlyRate: 40,
+        status: ProStatus.approved,
         createdAt: DateTime(2026, 1, 1)),
     Professional(
         uid: 'demo-pro-4',
@@ -102,6 +105,7 @@ class SeedService {
         bio:
             'DONNÉES DE DÉMONSTRATION. Peintre fictive, intérieur/extérieur, finitions soignées.',
         hourlyRate: 35,
+        status: ProStatus.approved,
         createdAt: DateTime(2026, 1, 1)),
     Professional(
         uid: 'demo-pro-5',
@@ -111,6 +115,7 @@ class SeedService {
         bio:
             'DONNÉES DE DÉMONSTRATION. Mécanicien fictif, diagnostic et réparation automobile à domicile.',
         hourlyRate: 48,
+        status: ProStatus.approved,
         createdAt: DateTime(2026, 1, 1)),
     Professional(
         uid: 'demo-pro-6',
@@ -120,6 +125,7 @@ class SeedService {
         bio:
             'DONNÉES DE DÉMONSTRATION. Multi-services fictifs, ménage et petits dépannages plomberie.',
         hourlyRate: 28,
+        status: ProStatus.approved,
         createdAt: DateTime(2026, 1, 1)),
   ];
 

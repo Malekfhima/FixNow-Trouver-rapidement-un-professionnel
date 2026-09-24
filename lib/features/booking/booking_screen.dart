@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,7 +6,6 @@ import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/utils/validators.dart';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:fixnow/core/constants/app_constants.dart';
 import 'package:fixnow/features/booking/booking_controller.dart';
@@ -27,7 +27,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
   final _priceController = TextEditingController();
   DateTime? _selectedDate;
   final String _categoryId = 'general';
-  final List<File> _photos = [];
+  final List<XFile> _photos = [];
 
   Future<void> _pickPhotos() async {
     final picker = ImagePicker();
@@ -38,8 +38,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
     );
     if (picked.isEmpty) return;
     setState(() {
-      // Compressées par le picker ; limite stricte au nombre max.
-      _photos.addAll(picked.map((x) => File(x.path)));
+      _photos.addAll(picked);
       if (_photos.length > AppConstants.maxPhotosPerRequest) {
         _photos.removeRange(
             AppConstants.maxPhotosPerRequest, _photos.length);
@@ -72,7 +71,6 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
   }
 
   Future<void> _submit() async {
-    // Protection double soumission : un envoi déjà en cours est ignoré.
     if (_isSubmitting) return;
 
     if (_formKey.currentState?.validate() ?? false) {
@@ -141,7 +139,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
               ),
               const SizedBox(height: AppSpacing.xl),
 
-              // Photos (0..max) — compressed by the picker
+              // Photos (0..max)
               Row(
                 children: [
                   const Text('Photos', style: AppTextStyles.h4),
@@ -175,11 +173,10 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                           children: [
                             ClipRRect(
                               borderRadius: AppRadius.mdAll,
-                              child: Image.file(
-                                _photos[index],
+                              child: _PickedThumb(
+                                file: _photos[index],
                                 width: 84,
                                 height: 84,
-                                fit: BoxFit.cover,
                               ),
                             ),
                             Positioned(
@@ -195,7 +192,10 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(Icons.close_rounded,
-                                      color: Theme.of(context).colorScheme.onPrimary, size: 14),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onPrimary,
+                                      size: 14),
                                 ),
                               ),
                             ),
@@ -224,11 +224,14 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                     prefixIcon: Icon(Icons.calendar_today_outlined),
                   ),
                   child: Text(
-                    _selectedDate == null 
-                        ? 'Choisir une date' 
+                    _selectedDate == null
+                        ? 'Choisir une date'
                         : DateFormat('dd/MM/yyyy').format(_selectedDate!),
                     style: _selectedDate == null
-                        ? TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)
+                        ? TextStyle(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant)
                         : null,
                   ),
                 ),
@@ -263,6 +266,51 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Cross-platform image thumbnail: reads bytes from an [XFile] and
+/// displays them with [Image.memory]. Shows a loading indicator while
+/// reading.
+class _PickedThumb extends StatelessWidget {
+  final XFile file;
+  final double width;
+  final double height;
+
+  const _PickedThumb({
+    required this.file,
+    required this.width,
+    required this.height,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List>(
+      future: file.readAsBytes(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done &&
+            snapshot.hasData) {
+          return Image.memory(
+            snapshot.data!,
+            width: width,
+            height: height,
+            fit: BoxFit.cover,
+          );
+        }
+        return Container(
+          width: width,
+          height: height,
+          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          child: const Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      },
     );
   }
 }

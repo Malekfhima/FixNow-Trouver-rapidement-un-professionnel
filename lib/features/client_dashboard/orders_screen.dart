@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
+import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/features/booking/booking_controller.dart';
 import 'package:fixnow/features/professional_profile/pro_profile_controller.dart';
 import 'package:fixnow/models/service_request_model.dart';
@@ -41,8 +43,9 @@ class OrdersScreen extends ConsumerWidget {
                   },
                 ),
               ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Erreur: $err')),
+        loading: () => const RequestCardSkeletonList(),
+        error: (err, stack) =>
+            Center(child: Text(ErrorMapper.message(err))),
       ),
     );
   }

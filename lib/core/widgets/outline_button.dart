@@ -36,7 +36,15 @@ class OutlineButton extends StatelessWidget {
           borderRadius: AppRadius.lgAll,
         ),
       ),
-      child: Text(label),
+      // Le libellé se rétrécit au lieu de déborder/wrap sur 2 lignes.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          label,
+          maxLines: 1,
+          softWrap: false,
+        ),
+      ),
     );
 
     if (isExpanded) {

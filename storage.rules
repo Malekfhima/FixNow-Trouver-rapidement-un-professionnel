@@ -1,0 +1,44 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Avatars ────────────────────────────────────────────────
+    // Read: any authenticated user
+    // Write: only the owner, image/*, max 5 MB
+    match /avatars/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                    && request.auth.uid == uid
+                    && request.resource.contentType.matches('image/.*')
+                    && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // ── Gallery ────────────────────────────────────────────────
+    // Read: any authenticated user
+    // Write: only the owner, image/*, max 5 MB
+    match /gallery/{uid}/{file} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                    && request.auth.uid == uid
+                    && request.resource.contentType.matches('image/.*')
+                    && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // ── Request photos ─────────────────────────────────────────
+    // Read & write: any authenticated user (client uploads for their request)
+    match /requests/{requestId}/{file} {
+      allow read, write: if request.auth != null
+                          && request.resource.contentType.matches('image/.*')
+                          && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // ── Chat images ────────────────────────────────────────────
+    // Read & write: any authenticated user (both participants may send)
+    match /chats/{chatId}/{file} {
+      allow read, write: if request.auth != null
+                          && request.resource.contentType.matches('image/.*')
+                          && request.resource.size < 5 * 1024 * 1024;
+    }
+  }
+}

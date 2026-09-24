@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:fixnow/services/storage_service.dart';
+import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/services/firestore_service.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 import 'package:fixnow/models/chat_model.dart';
@@ -69,13 +69,15 @@ class ChatListController extends StateNotifier<ChatListState> {
         state = state.copyWith(chats: chats, isLoading: false);
       },
       onError: (e, st) {
-        state = state.copyWith(isLoading: false, error: e.toString());
+        debugPrint('chat stream error: $e');
+        state = state.copyWith(isLoading: false, error: ErrorMapper.message(e));
       },
     );
   }
 }
 
-final chatListControllerProvider = StateNotifierProvider<ChatListController, ChatListState>((ref) {
+final chatListControllerProvider =
+    StateNotifierProvider<ChatListController, ChatListState>((ref) {
   return ChatListController(ref);
 });
 
@@ -116,23 +118,20 @@ class ChatDetailController extends StateNotifier<ChatDetailState> {
   final String chatId;
   StreamSubscription<List<ChatMessage>>? _messagesSub;
 
-  ChatDetailController(this._ref, this.chatId) : super(const ChatDetailState()) {
+  ChatDetailController(this._ref, this.chatId)
+      : super(const ChatDetailState()) {
     loadChat();
     _markReadOnOpen();
   }
 
-  /// Marks the conversation as read for the current user (opening it).
   Future<void> _markReadOnOpen() async {
     final user = _ref.read(currentUserProvider);
     if (user == null) return;
     try {
       await _ref.read(firestoreServiceProvider).markChatRead(chatId, user.uid);
-    } catch (_) {
-      // Best-effort: reading the chat still works if the mark fails.
-    }
+    } catch (_) {}
   }
 
-  /// Re-marks the chat as read (called when returning to the screen).
   Future<void> markReadNow() async {
     final user = _ref.read(currentUserProvider);
     if (user == null) return;
@@ -142,6 +141,7 @@ class ChatDetailController extends StateNotifier<ChatDetailState> {
   }
 
   /// Uploads an image and sends it as a chat message.
+  /// Uses [XFile] directly from ImagePicker — no dart:io needed.
   Future<void> sendImage() async {
     final user = _ref.read(currentUserProvider);
     if (user == null) return;
@@ -160,7 +160,7 @@ class ChatDetailController extends StateNotifier<ChatDetailState> {
       final url = await storage.uploadChatImage(
         chatId,
         const Uuid().v4(),
-        File(picked.path),
+        picked, // XFile — works on web and mobile
       );
       await sendMessage('', imageUrl: url);
       state = state.copyWith(isLoading: false);
@@ -181,14 +181,14 @@ class ChatDetailController extends StateNotifier<ChatDetailState> {
     final firestore = _ref.read(firestoreServiceProvider);
     final user = _ref.read(currentUserProvider);
 
-    // Both subscriptions are kept and cancelled on dispose (no leak).
     _messagesSub?.cancel();
     _messagesSub = firestore.messagesStream(chatId).listen(
       (messages) {
         state = state.copyWith(messages: messages, isLoading: false);
       },
       onError: (e, st) {
-        state = state.copyWith(isLoading: false, error: e.toString());
+        debugPrint('chat stream error: $e');
+        state = state.copyWith(isLoading: false, error: ErrorMapper.message(e));
       },
     );
 
@@ -216,7 +216,7 @@ class ChatDetailController extends StateNotifier<ChatDetailState> {
     if (user == null) return;
 
     final message = ChatMessage(
-      id: '', // Firestore will provide the document id
+      id: '',
       senderId: user.uid,
       text: text.trim(),
       imageUrl: imageUrl,
@@ -249,30 +249,29 @@ class ChatDetailController extends StateNotifier<ChatDetailState> {
               relatedId: chatId,
               title: 'Nouveau message',
               body: text.trim(),
-            );
+            ).timeout(const Duration(seconds: 8));
           }
         }
       } catch (_) {}
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      debugPrint('sendMessage failed: $e');
+      state = state.copyWith(error: ErrorMapper.message(e));
     }
   }
 }
 
-final chatDetailControllerProvider =
-    StateNotifierProvider.family<ChatDetailController, ChatDetailState, String>(
+final chatDetailControllerProvider = StateNotifierProvider.family<
+    ChatDetailController, ChatDetailState, String>(
   (ref, chatId) => ChatDetailController(ref, chatId),
 );
 
-/// Creates a chat between a client and a pro if one doesn't exist yet.
-/// Accepts a [WidgetRef] so it can be called from widgets (e.g. router helpers).
-Future<String?> ensureChatBetween({required String proId, required WidgetRef ref}) async {
+Future<String?> ensureChatBetween(
+    {required String proId, required WidgetRef ref}) async {
   final user = ref.read(currentUserProvider);
   if (user == null) return null;
 
   final firestore = ref.read(firestoreServiceProvider);
 
-  // Look for an existing chat between these two participants.
   final chatsStream = firestore.userChatsStream(user.uid);
   final existingChats = await chatsStream.first;
 
@@ -283,7 +282,6 @@ Future<String?> ensureChatBetween({required String proId, required WidgetRef ref
 
   if (existing.isNotEmpty) return existing.first.id;
 
-  // Create a new chat.
   final chat = Chat(
     id: '',
     clientId: user.uid,
@@ -293,7 +291,8 @@ Future<String?> ensureChatBetween({required String proId, required WidgetRef ref
   );
 
   final firestoreInstance = FirebaseFirestore.instance;
-  final chatDocRef = await firestoreInstance.collection('chats').add(chat.toFirestore());
+  final chatDocRef =
+      await firestoreInstance.collection('chats').add(chat.toFirestore());
 
   return chatDocRef.id;
 }

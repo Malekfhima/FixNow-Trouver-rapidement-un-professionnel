@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/services/firestore_service.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 import 'package:fixnow/models/service_request_model.dart';
@@ -91,7 +92,7 @@ class ProRequestsController extends StateNotifier<ProRequestsState> {
         );
       },
       onError: (e, st) {
-        state = state.copyWith(isLoading: false, error: e.toString());
+        state = state.copyWith(isLoading: false, error: ErrorMapper.message(e));
       },
     );
   }
@@ -146,7 +147,7 @@ class ProRequestsController extends StateNotifier<ProRequestsState> {
             },
           );
     } catch (e) {
-      return e.toString();
+      return ErrorMapper.message(e);
     }
 
     try {
@@ -229,7 +230,7 @@ class ProRequestsController extends StateNotifier<ProRequestsState> {
           );
       return null;
     } catch (e) {
-      return e.toString();
+      return ErrorMapper.message(e);
     }
   }
 }

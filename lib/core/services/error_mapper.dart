@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
@@ -15,11 +16,21 @@ class ErrorMapper {
   static String message(Object error) {
     if (error is FirebaseAuthException) return _auth(error);
     if (error is FirebaseException) return _firestore(error);
+    if (error is TimeoutException) {
+      return 'Le serveur met trop de temps à répondre. Vérifiez votre connexion puis réessayez.';
+    }
     if (error is FormatException) {
       return 'Saisie invalide. Vérifiez les champs du formulaire.';
     }
     // SocketException / ClientException / http errors…
     final s = error.toString().toLowerCase();
+    // Flutter web : erreur js_interop « boxed » qui masque la vraie cause.
+    if (s.contains('converted future')) {
+      return 'Une erreur technique est survenue. Réessayez ou rechargez la page.';
+    }
+    if (s.contains('google sign-in aborted')) {
+      return 'Connexion Google annulée.';
+    }
     if (s.contains('socket') ||
         s.contains('network') ||
         s.contains('client_exception') ||
@@ -57,6 +68,8 @@ class ErrorMapper {
         return 'Numéro de téléphone invalide (format international, ex. +33…).';
       case 'operation-not-allowed':
         return 'Cette méthode de connexion est désactivée.';
+      case 'google-account':
+        return 'Ce compte utilise la connexion Google : connectez-vous avec Google (aucun mot de passe à réinitialiser).';
     }
     _log(e);
     return 'Connexion impossible. Veuillez réessayer.';

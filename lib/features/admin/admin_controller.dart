@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/features/notifications/notification_helpers.dart';
 import 'package:fixnow/models/notification_model.dart';
 import 'package:fixnow/models/professional_model.dart';
@@ -100,7 +101,7 @@ class AdminController extends StateNotifier<AdminState> {
         users: usersCount,
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(isLoading: false, error: ErrorMapper.message(e));
     }
   }
 
@@ -149,7 +150,7 @@ class AdminController extends StateNotifier<AdminState> {
       await load();
       return null;
     } catch (e) {
-      return e.toString();
+      return ErrorMapper.message(e);
     }
   }
 
@@ -159,7 +160,7 @@ class AdminController extends StateNotifier<AdminState> {
       await load();
       return null;
     } catch (e) {
-      return e.toString();
+      return ErrorMapper.message(e);
     }
   }
 
@@ -185,7 +186,7 @@ class AdminController extends StateNotifier<AdminState> {
       });
       return null;
     } catch (e) {
-      return e.toString();
+      return ErrorMapper.message(e);
     }
   }
 }

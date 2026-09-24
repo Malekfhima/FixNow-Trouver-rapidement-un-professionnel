@@ -1,5 +1,4 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -26,13 +25,12 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   String? _avatarUrl;
-  File? _newAvatarFile;
+  XFile? _newAvatarFile;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    // Pre-fill from the current profile once loaded.
     final user = ref.read(userProfileProvider).valueOrNull;
     _nameController.text = user?.name ?? '';
     _phoneController.text = user?.phone ?? '';
@@ -55,13 +53,7 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
     );
     if (picked == null) return;
     if (!mounted) return;
-    if (kIsWeb) {
-      // On web, ImagePicker gives bytes — keep the URL path only for IO.
-      AppAlerts.warning(
-          context, 'Upload d\u2019avatar non supporté sur le web pour le moment');
-      return;
-    }
-    setState(() => _newAvatarFile = File(picked.path));
+    setState(() => _newAvatarFile = picked);
   }
 
   Future<void> _save() async {
@@ -132,18 +124,45 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                   children: [
                     CircleAvatar(
                       radius: 48,
-                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                      backgroundColor:
+                          Theme.of(context).colorScheme.primaryContainer,
                       backgroundImage: _newAvatarFile != null
-                          ? FileImage(_newAvatarFile!) as ImageProvider<Object>
+                          ? null
                           : (_avatarUrl ?? user?.avatarUrl) != null
-                              ? NetworkImage(_avatarUrl ?? user!.avatarUrl!)
+                              ? NetworkImage(
+                                  _avatarUrl ?? user!.avatarUrl!)
                                   as ImageProvider<Object>
                               : null,
-                      child: (_newAvatarFile == null &&
-                              (_avatarUrl ?? user?.avatarUrl) == null)
-                          ? const Icon(Icons.person,
-                              color: AppColors.primary, size: 48)
-                          : null,
+                      child: _newAvatarFile != null
+                          ? ClipOval(
+                              child: FutureBuilder<Uint8List>(
+                                future: _newAvatarFile!.readAsBytes(),
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState ==
+                                          ConnectionState.done &&
+                                      snapshot.hasData) {
+                                    return Image.memory(
+                                      snapshot.data!,
+                                      width: 96,
+                                      height: 96,
+                                      fit: BoxFit.cover,
+                                    );
+                                  }
+                                  return const SizedBox(
+                                    width: 96,
+                                    height: 96,
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    ),
+                                  );
+                                },
+                              ),
+                            )
+                          : ((_avatarUrl ?? user?.avatarUrl) == null)
+                              ? const Icon(Icons.person,
+                                  color: AppColors.primary, size: 48)
+                              : null,
                     ),
                     Positioned(
                       right: 0,
@@ -155,7 +174,9 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(Icons.camera_alt_rounded,
-                            color: Theme.of(context).colorScheme.onPrimary, size: 16),
+                            color:
+                                Theme.of(context).colorScheme.onPrimary,
+                            size: 16),
                       ),
                     ),
                   ],
@@ -181,7 +202,6 @@ class _ProfileEditScreenState extends ConsumerState<ProfileEditScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              // Email is the login identifier — read-only.
               TextFormField(
                 initialValue: user?.email ?? '',
                 enabled: false,

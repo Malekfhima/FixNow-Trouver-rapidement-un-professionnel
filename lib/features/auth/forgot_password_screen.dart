@@ -40,95 +40,160 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       setState(() => _emailSent = true);
     } else {
       final error = ref.read(authControllerProvider).error;
-      AppAlerts.error(context, error ?? 'Échec de l\'envoi de l\'email');
+      AppAlerts.error(context, error ?? "Échec de l'envoi de l'email");
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
+    final cs = Theme.of(context).colorScheme;
+    final success =
+        Theme.of(context).extension<SemanticColors>()?.success ??
+            AppColors.success;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        title: const Text('Mot de passe oublié'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => context.pop(),
+        ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.xl),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xl,
+        ),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: AppSpacing.xxl),
-              const Text(
-                'Réinitialiser\nvotre mot de passe',
-                style: AppTextStyles.h1,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Saisissez votre adresse email, nous vous enverrons un lien '
-                'pour créer un nouveau mot de passe.',
-                style: AppTextStyles.bodyLarge.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+              const SizedBox(height: AppSpacing.md),
+
+              // ── Icon ──────────────────────────────────────────
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: cs.tertiaryContainer,
+                  borderRadius: AppRadius.lgAll,
+                ),
+                child: Icon(
+                  Icons.lock_reset_rounded,
+                  color: cs.tertiary,
+                  size: 28,
                 ),
               ),
               const SizedBox(height: AppSpacing.xxxxl),
-              TextFormField(
-                controller: _emailController,
-                validator: Validators.email,
-                keyboardType: TextInputType.emailAddress,
-                autofillHints: const [AutofillHints.email],
-                decoration: const InputDecoration(
-                  hintText: 'Email',
-                  prefixIcon: Icon(Icons.email_outlined),
+
+              // ── Heading ───────────────────────────────────────
+              Text(
+                'Mot de passe\noublié ?',
+                style: AppTextStyles.displayMedium.copyWith(
+                  color: cs.onSurface,
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
-              if (_emailSent) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                "Saisissez votre adresse email, nous vous enverrons un lien "
+                'pour créer un nouveau mot de passe.',
+                style: AppTextStyles.bodyLarge.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxxxl),
+
+              if (!_emailSent) ...[
+                // ── Email field ─────────────────────────────────
+                TextFormField(
+                  controller: _emailController,
+                  validator: Validators.email,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _sendResetEmail(),
+                  autofillHints: const [AutofillHints.email],
+                  decoration: const InputDecoration(
+                    hintText: 'Adresse email',
+                    prefixIcon: Icon(Icons.email_outlined),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xxl),
+
+                // ── Submit ──────────────────────────────────────
+                PrimaryButton(
+                  label: 'Envoyer le lien',
+                  isLoading: authState.isLoading,
+                  onPressed: authState.isLoading ? null : _sendResetEmail,
+                ),
+              ] else ...[
+                // ── Success state ───────────────────────────────
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  padding: const EdgeInsets.all(AppSpacing.xl),
                   decoration: BoxDecoration(
-                    color: AppColors.success.withValues(alpha: 0.1),
-                    borderRadius: AppRadius.mdAll,
+                    color: success.withValues(alpha: 0.1),
+                    borderRadius: AppRadius.lgAll,
                     border: Border.all(
-                      color: AppColors.success.withValues(alpha: 0.4),
+                      color: success.withValues(alpha: 0.3),
                     ),
                   ),
-                  child: const Row(
+                  child: Column(
                     children: [
-                      Icon(Icons.mark_email_read_outlined,
-                          color: AppColors.success),
-                      SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Text(
-                          'Email envoyé ! Vérifiez votre boîte de réception '
-                          '(et vos spams) pour créer un nouveau mot de passe.',
-                          style: AppTextStyles.bodySmall,
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: success,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.mark_email_read_outlined,
+                          color: cs.surface,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        'Email envoyé !',
+                        style: AppTextStyles.h4.copyWith(
+                          color: success,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'Vérifiez votre boîte de réception (et vos spams) '
+                        'pour créer un nouveau mot de passe.',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: cs.onSurfaceVariant,
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
+
+                // ── Resend button ──────────────────────────────
+                PrimaryButton(
+                  label: "Renvoyer l'email",
+                  isLoading: authState.isLoading,
+                  onPressed: authState.isLoading ? null : _sendResetEmail,
+                ),
               ],
-              PrimaryButton(
-                label: _emailSent ? 'Renvoyer l\'email' : 'Envoyer le lien',
-                onPressed: authState.isLoading ? null : _sendResetEmail,
-                isLoading: authState.isLoading,
-              ),
-              const SizedBox(height: AppSpacing.lg),
+
+              const SizedBox(height: AppSpacing.xl),
+
+              // ── Back to login ─────────────────────────────────
               Center(
                 child: TextButton(
                   onPressed: () => context.go('/login'),
                   child: Text(
                     'Retour à la connexion',
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.primary,
+                      color: cs.primary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

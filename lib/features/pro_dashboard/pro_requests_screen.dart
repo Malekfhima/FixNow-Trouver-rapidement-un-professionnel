@@ -6,6 +6,7 @@ import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/models/service_request_state_machine.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/widgets/outline_button.dart';
+import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/features/pro_dashboard/pro_requests_controller.dart';
 import 'package:fixnow/models/service_request_model.dart';
 import 'package:intl/intl.dart';
@@ -39,7 +40,7 @@ class ProRequestsScreen extends ConsumerWidget {
           ),
         ),
         body: state.isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const RequestCardSkeletonList()
             : state.error != null
                 ? Center(child: Text('Erreur : ${state.error}'))
                 : TabBarView(

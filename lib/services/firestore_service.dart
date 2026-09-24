@@ -196,7 +196,13 @@ class FirestoreService {
   }
 
   Future<void> createNotification(NotificationItem notification) async {
-    await _db.collection('notifications').doc().set(notification.toFirestore());
+    // Timeout : une notification est best-effort — elle ne doit jamais
+    // bloquer l'action qui l'accompagne (envoi de réservation, de message…).
+    await _db
+        .collection('notifications')
+        .doc()
+        .set(notification.toFirestore())
+        .timeout(const Duration(seconds: 8));
   }
 
   Future<void> markNotificationRead(String notificationId) async {

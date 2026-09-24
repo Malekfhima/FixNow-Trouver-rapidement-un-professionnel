@@ -261,13 +261,18 @@ class _NewChatScreenState extends ConsumerState<_NewChatScreen> {
       return;
     }
 
-    final chatId = await ensureChatBetween(proId: proId, ref: ref);
-    if (!mounted) return;
-    if (chatId != null) {
-      context.go('/chat/$chatId');
-    } else {
-      // If no user logged in, go back.
-      context.go('/login');
+    try {
+      final chatId = await ensureChatBetween(proId: proId, ref: ref);
+      if (!mounted) return;
+      if (chatId != null) {
+        context.go('/chat/$chatId');
+      } else {
+        // If no user logged in, go back.
+        context.go('/login');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      context.go('/chat');
     }
   }
 
