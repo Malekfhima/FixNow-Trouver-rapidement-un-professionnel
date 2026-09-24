@@ -13,11 +13,12 @@ import 'package:fixnow/features/notifications/notification_helpers.dart';
 import 'package:fixnow/models/notification_model.dart';
 import 'package:fixnow/models/user_model.dart';
 
-/// Resolves a user profile by uid (names/avatars in chat screens).
+/// Resolves a PUBLIC profile by uid (names/avatars in chat screens).
+/// users/{uid} is private (email/phone/fcmToken) — publicProfiles only.
 final userByIdProvider = FutureProvider.autoDispose.family<AppUser?, String>(
   (ref, uid) {
     if (uid.isEmpty) return Future.value(null);
-    return ref.watch(firestoreServiceProvider).getUser(uid);
+    return ref.watch(firestoreServiceProvider).getPublicProfile(uid);
   },
 );
 

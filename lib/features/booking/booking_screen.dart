@@ -88,7 +88,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
         description: _descriptionController.text.trim(),
         address: _addressController.text.trim(),
         scheduledDate: _selectedDate,
-        price: double.tryParse(_priceController.text.replaceAll(',', '.')),
+        budget: double.tryParse(_priceController.text.replaceAll(',', '.')),
         photos: _photos,
       );
 

@@ -132,6 +132,9 @@ class AdminController extends StateNotifier<AdminState> {
         _r,
         userId: pro.uid,
         type: type,
+        // Lien réel exigé par les règles : la validation concerne bien
+        // le profil professionnel de ce destinataire.
+        relatedId: pro.uid,
         title: NotificationCopy.titleFor(type),
         body: type == NotificationType.proApproved
             ? 'Votre profil professionnel est validé. Vous êtes visible par les clients !'

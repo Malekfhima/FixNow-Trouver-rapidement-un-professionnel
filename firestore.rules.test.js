@@ -9,7 +9,7 @@ const {
 } = require('@firebase/rules-unit-testing');
 const fs = require('fs');
 const path = require('path');
-const { setDoc, doc, getDoc, serverTimestamp } = require('firebase/firestore');
+const { setDoc, doc, getDoc, serverTimestamp, writeBatch } = require('firebase/firestore');
 
 let env;
 
@@ -327,6 +327,7 @@ describe('serviceRequests : machine à états stricte', () => {
   const STATUSES = ['pending', 'accepted', 'quoted', 'inProgress', 'completed', 'declined', 'cancelled'];
   const VALID = new Set([
     'pending>accepted', 'pending>declined', 'pending>cancelled',
+    'pending>quoted',
     'accepted>inProgress', 'accepted>cancelled',
     'quoted>accepted', 'quoted>cancelled',
     'inProgress>completed',
@@ -349,9 +350,9 @@ describe('serviceRequests : machine à états stricte', () => {
           (VALID.has(key) &&
             // Acteur attendu pour chaque transition
             ((to === 'cancelled' && actor === 'client') ||
-             (to === 'accepted' && from === 'pending' && actor === 'pro') ||
-             (to === 'accepted' && from === 'quoted' && actor === 'client') ||
-             (to === 'declined' && actor === 'pro') ||
+             (to === 'accepted' && from === 'pending' && actor === 'pro') ||             (to === 'accepted' && from === 'quoted' && actor === 'client') || 
+             (to === 'quoted' && from === 'pending' && actor === 'pro') || 
+             (to === 'declined' && actor === 'pro') || 
              (to === 'inProgress' && actor === 'pro') ||
              (to === 'completed' && actor === 'pro')));
 
@@ -373,27 +374,72 @@ describe('serviceRequests : machine à états stricte', () => {
     }
   }
 
-  test('édition sans changement de statut autorisée (métadonnées)', async () => {
+  test('FAILLE (faille 3) : chaque acteur ne modifie QUE ses propres champs', async () => {
     await seedUser('cX', 'client');
     await seedUser('pX', 'pro');
     await seedRequest('mr2', 'cX', 'pX', 'pending');
-    const db = authedDb('pX', 'pro');
+    const client = authedDb('cX', 'client');
+    const pro = authedDb('pX', 'pro');
+
+    // Le client peut corriger sa description (sans changer le statut)…
     await assertSucceeds(
-      setDoc(doc(db, 'serviceRequests', 'mr2'), { description: 'maj description' }, { merge: true })
+      setDoc(doc(client, 'serviceRequests', 'mr2'), { description: 'maj description' }, { merge: true })
+    );
+    // …mais JAMAIS les champs réservés au pro (devis / prix).
+    await assertFails(
+      setDoc(doc(client, 'serviceRequests', 'mr2'), { quotePrice: 120 }, { merge: true })
+    );
+    await assertFails(
+      setDoc(doc(client, 'serviceRequests', 'mr2'), { price: 120 }, { merge: true })
+    );
+    // Le pro peut renseigner son devis…
+    await assertSucceeds(
+      setDoc(doc(pro, 'serviceRequests', 'mr2'), { quotePrice: 120, quoteNote: 'ok' }, { merge: true })
+    );
+    // …mais ne réécrit pas la description du client.
+    await assertFails(
+      setDoc(doc(pro, 'serviceRequests', 'mr2'), { description: 'réécrite par le pro' }, { merge: true })
+    );
+  });
+
+  test('faille 3 : les clés clientId / proId / categoryId / createdAt sont immuables', async () => {
+    await seedUser('cIm', 'client');
+    await seedUser('pIm', 'pro');
+    await seedUser('pOther', 'pro');
+    await seedRequest('mr3', 'cIm', 'pIm', 'pending');
+    const client = authedDb('cIm', 'client');
+
+    await assertFails(
+      setDoc(doc(client, 'serviceRequests', 'mr3'), { proId: 'pOther' }, { merge: true })
+    );
+    await assertFails(
+      setDoc(doc(client, 'serviceRequests', 'mr3'), { clientId: 'pOther' }, { merge: true })
+    );
+    await assertFails(
+      setDoc(doc(client, 'serviceRequests', 'mr3'), { categoryId: 'autre' }, { merge: true })
+    );
+    await assertFails(
+      setDoc(doc(client, 'serviceRequests', 'mr3'), { createdAt: serverTimestamp() }, { merge: true })
     );
   });
 });
 
 describe('notifications : réservées au destinataire', () => {
-  test("un utilisateur peut créer une notification pour quelqu'un d'autre (actorId = soi)", async () => {
+  test("un participant crée une notification liée à LEUR conversation", async () => {
     await seedUser('n1', 'client');
     await seedUser('n2', 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'chats', 'chatN1N2'), {
+        clientId: 'n1', proId: 'n2', lastMessage: '',
+      });
+    });
     const db = authedDb('n1', 'client');
     await assertSucceeds(
       setDoc(doc(db, 'notifications', 'notif1'), {
         userId: 'n2',
         actorId: 'n1',
         type: 'newMessage',
+        relatedId: 'chatN1N2',
         title: 'Nouveau message',
         body: 'Salut',
         read: false,
@@ -473,24 +519,100 @@ describe('serviceRequests : acceptation de devis par le client', () => {
   });
 });
 
-describe('professionals : agrégation des notes', () => {
-  test("un utilisateur authentifié peut écrire UNIQUEMENT ratingAvg/ratingCount", async () => {
-    await seedUser('p10', 'pro');
+describe('professionals : agrégation des notes (batch avis + compteurs)', () => {
+  async function seedProRatings(id, ratingAvg, ratingCount) {
+    await seedUser(id, 'pro');
     await env.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'professionals', 'p10'), {
+      await setDoc(doc(ctx.firestore(), 'professionals', id), {
         name: 'Pro',
         categories: ['Plomberie'],
         status: 'approved',
-        ratingAvg: 0,
-        ratingCount: 0,
+        ratingAvg,
+        ratingCount,
       });
     });
+  }
+
+  async function seedCompletedRequest(id, clientId, proId) {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'serviceRequests', id), {
+        clientId,
+        proId,
+        status: 'completed',
+        description: 'test',
+        address: 'test',
+      });
+    });
+  }
+
+  // Le correctif : UN seul batch écrit l'avis ET les compteurs cohérents.
+  function batchReviewAndCounters(uid, requestId, proId, rating, { count, avg }) {
+    const db = authedDb(uid, 'client');
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'reviews', requestId), {
+      requestId,
+      clientId: uid,
+      proId,
+      rating,
+      comment: 'Très bien',
+    });
+    batch.update(doc(db, 'professionals', proId), {
+      ratingAvg: avg,
+      ratingCount: count,
+      lastRatingReviewId: requestId,
+    });
+    return batch.commit();
+  }
+
+  test("faille 6 : écrire ratingAvg/ratingCount SANS avis dans le même batch = refusé", async () => {
+    await seedProRatings('p10', 0, 0);
     const db = authedDb('u1', 'client');
-    await assertSucceeds(
+    await assertFails(
       setDoc(doc(db, 'professionals', 'p10'), { ratingAvg: 4.5, ratingCount: 2 }, { merge: true })
     );
     await assertFails(
       setDoc(doc(db, 'professionals', 'p10'), { ratingAvg: 5, status: 'rejected' }, { merge: true })
+    );
+    await assertFails(
+      setDoc(doc(db, 'professionals', 'p10'), { ratingCount: 1 }, { merge: true })
+    );
+  });
+
+  test("batch [avis + compteurs cohérents] : accepté (1er avis)", async () => {
+    await seedProRatings('p12', 0, 0);
+    await seedCompletedRequest('rb1', 'cB1', 'p12');
+    await assertSucceeds(
+      batchReviewAndCounters('cB1', 'rb1', 'p12', 4, { count: 1, avg: 4 })
+    );
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const pro = await getDoc(doc(ctx.firestore(), 'professionals', 'p12'));
+      expect(pro.data().ratingCount).toBe(1);
+      expect(pro.data().ratingAvg).toBe(4);
+      expect(pro.data().lastRatingReviewId).toBe('rb1');
+    });
+  });
+
+  test("batch avec compteur faussé (+2 ou moyenne incohérente) = refusé", async () => {
+    await seedProRatings('p13', 0, 0);
+    await seedCompletedRequest('rb2', 'cB2', 'p13');
+    // ratingCount +2
+    await assertFails(batchReviewAndCounters('cB2', 'rb2', 'p13', 4, { count: 2, avg: 4 }));
+    // moyenne qui ne correspond pas à la note portée
+    await assertFails(batchReviewAndCounters('cB2', 'rb2', 'p13', 4, { count: 1, avg: 5 }));
+    // moyenne hors bornes 1..5
+    await assertFails(batchReviewAndCounters('cB2', 'rb2', 'p13', 4, { count: 1, avg: 7 }));
+  });
+
+  test("2e avis : moyenne recalculée exactement (4.5 / 2) = accepté", async () => {
+    await seedProRatings('p14', 4, 1);
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'reviews', 'old1'), {
+        requestId: 'old1', clientId: 'cOld', proId: 'p14', rating: 4, comment: 'ok',
+      });
+    });
+    await seedCompletedRequest('rb3', 'cB3', 'p14');
+    await assertSucceeds(
+      batchReviewAndCounters('cB3', 'rb3', 'p14', 5, { count: 2, avg: 4.5 })
     );
   });
 
@@ -591,5 +713,544 @@ describe('categories : écriture admin uniquement', () => {
     await seedUser('admin3', 'admin');
     const db = authedDb('admin3', 'admin');
     await assertSucceeds(setDoc(doc(db, 'categories', 'cat2'), { name: 'Plomberie' }));
+  });
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// TESTS DES FAILLES CORRIGÉES
+// Chaque test ci-dessous ÉCHOUEAIT avant le correctif et PASSE après.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+describe('faille 1 : professionals création en pending uniquement', () => {
+  test("FAILLE : un pro ne peut PAS créer son profil déjà 'approved'", async () => {
+    await seedUser('pSelf', 'pro');
+    const db = authedDb('pSelf', 'pro');
+    await assertFails(
+      setDoc(doc(db, 'professionals', 'pSelf'), {
+        categories: ['Plomberie'],
+        bio: 'auto-approuvé',
+        hourlyRate: 40,
+        status: 'approved',
+        ratingAvg: 0,
+        ratingCount: 0,
+      })
+    );
+  });
+
+  test("FAILLE : un pro ne peut PAS créer son profil avec des notes non nulles", async () => {
+    await seedUser('pRated', 'pro');
+    const db = authedDb('pRated', 'pro');
+    await assertFails(
+      setDoc(doc(db, 'professionals', 'pRated'), {
+        categories: ['Plomberie'],
+        bio: 'fausse réputation',
+        hourlyRate: 40,
+        status: 'pending',
+        ratingAvg: 4.9,
+        ratingCount: 127,
+      })
+    );
+  });
+
+  test("création légitime : status pending + notes à zéro = acceptée", async () => {
+    await seedUser('pOk', 'pro');
+    const db = authedDb('pOk', 'pro');
+    await assertSucceeds(
+      setDoc(doc(db, 'professionals', 'pOk'), {
+        categories: ['Plomberie'],
+        bio: 'vrai pro',
+        hourlyRate: 40,
+        status: 'pending',
+        ratingAvg: 0,
+        ratingCount: 0,
+      })
+    );
+  });
+});
+
+describe('faille 2 : serviceRequests création verrouillée', () => {
+  async function seedApprovedPro(id) {
+    await seedUser(id, 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'professionals', id), {
+        categories: ['Plomberie'],
+        status: 'approved',
+      });
+    });
+  }
+
+  async function seedPendingPro(id) {
+    await seedUser(id, 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'professionals', id), {
+        categories: ['Plomberie'],
+        status: 'pending',
+      });
+    });
+  }
+
+  const VALID = {
+    clientId: 'cNew',
+    proId: 'pNew',
+    categoryId: 'cat-1',
+    status: 'pending',
+    description: 'Fuite sous le lavabo',
+    address: '12 rue des Lilas, Paris',
+  };
+
+  beforeEach(async () => {
+    await seedUser('cNew', 'client');
+    await seedApprovedPro('pNew');
+  });
+
+  test("FAILLE : création avec un statut autre que 'pending' = refusée", async () => {
+    const db = authedDb('cNew', 'client');
+    await assertFails(
+      setDoc(doc(db, 'serviceRequests', 'sr-approved'), { ...VALID, status: 'accepted' })
+    );
+    await assertFails(
+      setDoc(doc(db, 'serviceRequests', 'sr-completed'), { ...VALID, status: 'completed' })
+    );
+  });
+
+  test("FAILLE : un pro ne peut PAS se cibler lui-même = refusé", async () => {
+    const db = authedDb('pNew', 'pro');
+    await assertFails(
+      setDoc(doc(db, 'serviceRequests', 'sr-self'), { ...VALID, clientId: 'pNew', proId: 'pNew' })
+    );
+  });
+
+  test("FAILLE : création avec un devis ou un prix déjà remplis = refusée", async () => {
+    const db = authedDb('cNew', 'client');
+    await assertFails(
+      setDoc(doc(db, 'serviceRequests', 'sr-quote'), { ...VALID, quotePrice: 150 })
+    );
+    await assertFails(
+      setDoc(doc(db, 'serviceRequests', 'sr-note'), { ...VALID, quoteNote: 'devis anticipé' })
+    );
+    await assertFails(
+      setDoc(doc(db, 'serviceRequests', 'sr-price'), { ...VALID, price: 99 })
+    );
+  });
+
+  test("FAILLE : cibler un professionnel NON approuvé = refusé", async () => {
+    await seedPendingPro('pWaiting');
+    const db = authedDb('cNew', 'client');
+    await assertFails(
+      setDoc(doc(db, 'serviceRequests', 'sr-pending-pro'), { ...VALID, proId: 'pWaiting' })
+    );
+  });
+
+  test("FAILLE : cibler un professionnel inexistant = refusé", async () => {
+    const db = authedDb('cNew', 'client');
+    await assertFails(
+      setDoc(doc(db, 'serviceRequests', 'sr-ghost'), { ...VALID, proId: 'pas-une-personne' })
+    );
+  });
+
+  test("création valide vers un pro approuvé = acceptée", async () => {
+    const db = authedDb('cNew', 'client');
+    await assertSucceeds(setDoc(doc(db, 'serviceRequests', 'sr-valid'), VALID));
+  });
+});
+
+describe('faille 4 : machine à états pending -> quoted (pro)', () => {
+  test("FAILLE : le pro peut proposer un devis (pending -> quoted)", async () => {
+    await seedUser('cQ', 'client');
+    await seedUser('pQ', 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'serviceRequests', 'rq-pro'), {
+        clientId: 'cQ', proId: 'pQ', status: 'pending',
+        description: 'test', address: 'test',
+      });
+    });
+    const db = authedDb('pQ', 'pro');
+    await assertSucceeds(
+      setDoc(doc(db, 'serviceRequests', 'rq-pro'), {
+        status: 'quoted', quotePrice: 180, quoteNote: 'Dépannage',
+      }, { merge: true })
+    );
+  });
+
+  test("le client ne peut PAS passer pending -> quoted (réservé au pro)", async () => {
+    await seedUser('cQ2', 'client');
+    await seedUser('pQ2', 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'serviceRequests', 'rq-client'), {
+        clientId: 'cQ2', proId: 'pQ2', status: 'pending',
+        description: 'test', address: 'test',
+      });
+    });
+    const db = authedDb('cQ2', 'client');
+    await assertFails(
+      setDoc(doc(db, 'serviceRequests', 'rq-client'), { status: 'quoted' }, { merge: true })
+    );
+  });
+
+  test("le pro ne peut PAS démarrer depuis pending (accepted d'abord)", async () => {
+    await seedUser('cQ3', 'client');
+    await seedUser('pQ3', 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'serviceRequests', 'rq-skip'), {
+        clientId: 'cQ3', proId: 'pQ3', status: 'pending',
+        description: 'test', address: 'test',
+      });
+    });
+    const db = authedDb('pQ3', 'pro');
+    await assertFails(
+      setDoc(doc(db, 'serviceRequests', 'rq-skip'), { status: 'inProgress' }, { merge: true })
+    );
+  });
+});
+
+describe('faille 5 : reviews — rating, commentaire et pro assigné', () => {
+  async function seedDoneRequest(id, clientId, proId) {
+    await seedUser(clientId, 'client');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'serviceRequests', id), {
+        clientId, proId, status: 'completed',
+        description: 'test', address: 'test',
+      });
+    });
+  }
+
+  test("FAILLE : rating hors bornes (0, 6) ou non entier = refusé", async () => {
+    await seedDoneRequest('rv1', 'cR1', 'pR1');
+    const db = authedDb('cR1', 'client');
+    await assertFails(
+      setDoc(doc(db, 'reviews', 'rv1'), {
+        requestId: 'rv1', clientId: 'cR1', proId: 'pR1', rating: 0, comment: 'nul',
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'reviews', 'rv1'), {
+        requestId: 'rv1', clientId: 'cR1', proId: 'pR1', rating: 6, comment: 'trop bien',
+      })
+    );
+    await assertFails(
+      setDoc(doc(db, 'reviews', 'rv1'), {
+        requestId: 'rv1', clientId: 'cR1', proId: 'pR1', rating: 4.5, comment: 'décimal',
+      })
+    );
+  });
+
+  test("FAILLE : commentaire de plus de 1000 caractères = refusé", async () => {
+    await seedDoneRequest('rv2', 'cR2', 'pR2');
+    const db = authedDb('cR2', 'client');
+    await assertFails(
+      setDoc(doc(db, 'reviews', 'rv2'), {
+        requestId: 'rv2', clientId: 'cR2', proId: 'pR2',
+        rating: 5, comment: 'x'.repeat(1001),
+      })
+    );
+    // Juste à la limite : accepté.
+    await assertSucceeds(
+      setDoc(doc(db, 'reviews', 'rv2'), {
+        requestId: 'rv2', clientId: 'cR2', proId: 'pR2',
+        rating: 5, comment: 'x'.repeat(1000),
+      })
+    );
+  });
+
+  test("FAILLE : review.proId différent du pro assigné à la demande = refusé", async () => {
+    await seedDoneRequest('rv3', 'cR3', 'pR3');
+    await seedUser('pInnocent', 'pro');
+    const db = authedDb('cR3', 'client');
+    await assertFails(
+      setDoc(doc(db, 'reviews', 'rv3'), {
+        requestId: 'rv3', clientId: 'cR3', proId: 'pInnocent',
+        rating: 1, comment: 'mauvaise foi',
+      })
+    );
+  });
+});
+
+describe('faille 7 : users privé + publicProfiles', () => {
+  test("FAILLE : lire le users/{uid} d'un autre utilisateur = refusé", async () => {
+    await seedUser('priv1', 'client');
+    await seedUser('priv2', 'client');
+    const intruder = authedDb('priv2', 'client');
+    await assertFails(getDoc(doc(intruder, 'users', 'priv1')));
+    // …et les emails / téléphones des autres restent inaccessibles
+    // même via une lecture du sien puis d'un tiers en batch de requêtes :
+    await assertFails(getDoc(doc(intruder, 'users', 'priv1')));
+    // Le profil PUBLIC reste lisible.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'publicProfiles', 'priv1'), {
+        name: 'Privé Un', avatarUrl: null, role: 'client',
+      });
+    });
+    await assertSucceeds(getDoc(doc(intruder, 'publicProfiles', 'priv1')));
+  });
+
+  test("le propriétaire lit et écrit SON profil privé", async () => {
+    await seedUser('priv3', 'client');
+    const db = authedDb('priv3', 'client');
+    await assertSucceeds(getDoc(doc(db, 'users', 'priv3')));
+    await assertSucceeds(
+      setDoc(doc(db, 'publicProfiles', 'priv3'), {
+        name: 'Moi', avatarUrl: 'https://x/y.png', role: 'client',
+      })
+    );
+  });
+
+  test("FAILLE : un tiers ne peut PAS écrire le publicProfiles de quelqu'un", async () => {
+    await seedUser('pub1', 'client');
+    await seedUser('intrus3', 'client');
+    await assertSucceeds(
+      setDoc(doc(authedDb('pub1', 'client'), 'publicProfiles', 'pub1'), {
+        name: 'Moi', role: 'client',
+      })
+    );
+    await assertFails(
+      setDoc(doc(authedDb('intrus3', 'client'), 'publicProfiles', 'pub1'), {
+        name: 'Profil pirate', role: 'client',
+      }, { merge: true })
+    );
+  });
+
+  test("un admin peut lire un profil privé et corriger un publicProfile", async () => {
+    await seedUser('priv4', 'client');
+    await seedUser('admP', 'admin');
+    const admin = authedDb('admP', 'admin');
+    await assertSucceeds(getDoc(doc(admin, 'users', 'priv4')));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'publicProfiles', 'priv4'), {
+        name: 'Privé Quatre', role: 'client',
+      });
+    });
+    await assertSucceeds(
+      setDoc(doc(admin, 'publicProfiles', 'priv4'), {
+        name: 'Corrigé', role: 'client',
+      }, { merge: true })
+    );
+  });
+});
+
+describe('faille 8 : chats immuables + messages verrouillés', () => {
+  async function seedChatWithMessage(chatId, msgId) {
+    await seedUser('cMsg', 'client');
+    await seedUser('pMsg', 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'chats', chatId), {
+        clientId: 'cMsg', proId: 'pMsg', lastMessage: 'Bonjour',
+      });
+      await setDoc(doc(ctx.firestore(), 'chats', chatId, 'messages', msgId), {
+        senderId: 'cMsg', text: 'Bonjour', read: false,
+      });
+    });
+  }
+
+  test("FAILLE : réaffecter clientId/proId d'une conversation = refusé", async () => {
+    await seedChatWithMessage('chatImm', 'm1');
+    const db = authedDb('cMsg', 'client');
+    await assertFails(
+      setDoc(doc(db, 'chats', 'chatImm'), { clientId: 'intrus' }, { merge: true })
+    );
+    await assertFails(
+      setDoc(doc(db, 'chats', 'chatImm'), { proId: 'intrus' }, { merge: true })
+    );
+    // Les métadonnées restent libres (compteurs non lus, dernier message).
+    await assertSucceeds(
+      setDoc(doc(db, 'chats', 'chatImm'), { unreadClient: 0 }, { merge: true })
+    );
+  });
+
+  test("FAILLE : modifier le texte d'un message existant = refusé", async () => {
+    await seedChatWithMessage('chatTxt', 'm2');
+    const db = authedDb('pMsg', 'pro');
+    await assertFails(
+      setDoc(doc(db, 'chats', 'chatTxt', 'messages', 'm2'), {
+        text: 'message réécrit',
+      }, { merge: true })
+    );
+    // Seul 'read' peut bouger.
+    await assertSucceeds(
+      setDoc(doc(db, 'chats', 'chatTxt', 'messages', 'm2'), {
+        read: true,
+      }, { merge: true })
+    );
+  });
+
+  test("FAILLE : message de plus de 2000 caractères = refusé", async () => {
+    await seedChatWithMessage('chatLong', 'm3');
+    const db = authedDb('cMsg', 'client');
+    await assertFails(
+      setDoc(doc(db, 'chats', 'chatLong', 'messages', 'mTooLong'), {
+        senderId: 'cMsg', text: 'x'.repeat(2001), read: false,
+      })
+    );
+    await assertSucceeds(
+      setDoc(doc(db, 'chats', 'chatLong', 'messages', 'mOk'), {
+        senderId: 'cMsg', text: 'x'.repeat(2000), read: false,
+      })
+    );
+  });
+
+  test("FAILLE : un message envoyé sous l'identité d'autrui = refusé", async () => {
+    await seedChatWithMessage('chatSpoof', 'm4');
+    const db = authedDb('pMsg', 'pro');
+    await assertFails(
+      setDoc(doc(db, 'chats', 'chatSpoof', 'messages', 'mSpoof'), {
+        senderId: 'cMsg', text: 'je me fais passer pour le client', read: false,
+      })
+    );
+  });
+});
+
+describe('faille 9 : notifications — type, taille et lien réel', () => {
+  async function seedLinkedChat() {
+    await seedUser('cN', 'client');
+    await seedUser('pN', 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'chats', 'chatLien'), {
+        clientId: 'cN', proId: 'pN', lastMessage: '',
+      });
+    });
+  }
+
+  async function seedSharedRequest() {
+    await seedUser('cS', 'client');
+    await seedUser('pS', 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'serviceRequests', 'reqLien'), {
+        clientId: 'cS', proId: 'pS', status: 'pending',
+        description: 'test', address: 'test',
+      });
+    });
+  }
+
+  const BASE = {
+    userId: 'pN',
+    actorId: 'cN',
+    type: 'newMessage',
+    relatedId: 'chatLien',
+    title: 'Nouveau message',
+    body: 'Salut !',
+    read: false,
+  };
+
+  test("FAILLE : type hors liste blanche = refusé", async () => {
+    await seedLinkedChat();
+    const db = authedDb('cN', 'client');
+    await assertFails(
+      setDoc(doc(db, 'notifications', 'nt-type'), { ...BASE, type: 'malicious' })
+    );
+    await assertFails(
+      setDoc(doc(db, 'notifications', 'nt-type2'), { ...BASE, type: 'roleAdmin' })
+    );
+  });
+
+  test("FAILLE : titre/body trop longs = refusé", async () => {
+    await seedLinkedChat();
+    const db = authedDb('cN', 'client');
+    await assertFails(
+      setDoc(doc(db, 'notifications', 'nt-title'), { ...BASE, title: 'x'.repeat(201) })
+    );
+    await assertFails(
+      setDoc(doc(db, 'notifications', 'nt-body'), { ...BASE, body: 'x'.repeat(2001) })
+    );
+  });
+
+  test("FAILLE : notification SANS lien relatedId = refusée", async () => {
+    await seedLinkedChat();
+    const db = authedDb('cN', 'client');
+    await assertFails(
+      setDoc(doc(db, 'notifications', 'nt-nolink'), { ...BASE, relatedId: null })
+    );
+    await assertFails(
+      setDoc(doc(db, 'notifications', 'nt-nolink2'), {
+        ...BASE, relatedId: 'conversation-qui-nexiste-pas',
+      })
+    );
+  });
+
+  test("FAILLE : lié à une conversation à laquelle l'appelant ne participe pas = refusée", async () => {
+    await seedLinkedChat();
+    await seedUser('intrusN', 'client');
+    const db = authedDb('intrusN', 'client');
+    await assertFails(
+      setDoc(doc(db, 'notifications', 'nt-foreign'), {
+        ...BASE, actorId: 'intrusN',
+      })
+    );
+  });
+
+  test("lien serviceRequest partagée (client -> pro) = acceptée", async () => {
+    await seedSharedRequest();
+    const db = authedDb('cS', 'client');
+    await assertSucceeds(
+      setDoc(doc(db, 'notifications', 'nt-req'), {
+        userId: 'pS', actorId: 'cS', type: 'requestAccepted',
+        relatedId: 'reqLien', title: 'Devis accepté', body: 'OK', read: false,
+      })
+    );
+  });
+
+  test("FAILLE : proApproved envoyé par un NON-admin = refusée", async () => {
+    await seedUser('fakeVictim', 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'professionals', 'fakeVictim'), {
+        categories: ['Plomberie'], status: 'pending',
+      });
+    });
+    const db = authedDb('cN', 'client');
+    await assertFails(
+      setDoc(doc(db, 'notifications', 'nt-fake'), {
+        userId: 'fakeVictim', actorId: 'cN', type: 'proApproved',
+        relatedId: 'fakeVictim',
+        title: 'Profil validé', body: 'Vous êtes approuvé !', read: false,
+      })
+    );
+  });
+
+  test("proApproved par l'admin (relatedId = uid du pro) = acceptée", async () => {
+    await seedUser('realVictim', 'pro');
+    await seedUser('admN', 'admin');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'professionals', 'realVictim'), {
+        categories: ['Plomberie'], status: 'approved',
+      });
+    });
+    const db = authedDb('admN', 'admin');
+    await assertSucceeds(
+      setDoc(doc(db, 'notifications', 'nt-real'), {
+        userId: 'realVictim', actorId: 'admN', type: 'proApproved',
+        relatedId: 'realVictim',
+        title: 'Profil validé', body: 'Validé.', read: false,
+      })
+    );
+  });
+});
+
+describe('faille 10 : rôles — migration vers les custom claims', () => {
+  test("FAILLE : admin porteur UNIQUEMENT du custom claim admin (sans rôle legacy) administre", async () => {
+    // Le document users porte encore role = 'client' : avant la migration
+    // vers les claims, cet admin était refusé.
+    await seedUser('claimAdmin', 'client');
+    await seedUser('victimClaim', 'client');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'professionals', 'pClaim'), {
+        categories: ['Plomberie'], status: 'pending',
+      });
+    });
+
+    const db = env.authenticatedContext('claimAdmin', { admin: true }).firestore();
+
+    // Approuver un pro sans avoir le rôle legacy admin…
+    await assertSucceeds(
+      setDoc(doc(db, 'professionals', 'pClaim'), { status: 'approved' }, { merge: true })
+    );
+    // …et lire le profil privé d'un autre utilisateur.
+    await assertSucceeds(getDoc(doc(db, 'users', 'victimClaim')));
+    // …et compter les utilisateurs (requête admin).
+    await assertSucceeds(getDoc(doc(db, 'users', 'claimAdmin')));
+  });
+
+  test("un utilisateur SANS claim ni rôle admin reste refusé", async () => {
+    await seedUser('notAdmin', 'client');
+    await seedUser('otherUser', 'client');
+    const db = authedDb('notAdmin', 'client');
+    await assertFails(getDoc(doc(db, 'users', 'otherUser')));
   });
 });

@@ -122,19 +122,14 @@ class ProRequestsController extends StateNotifier<ProRequestsState> {
     );
   }
 
-  /// Sends a quote for a pending request.
-  ///
-  /// NOTE: status stays 'pending' + quote fields set — the request only
-  /// moves to 'quoted'... actually keeps 'pending' so the client simply
-  /// sees the quote and accepts (pending -> accepted). This avoids a
-  /// second status concept for "quote sent".
+  /// Sends a quote for a pending request (state machine:
+  /// pending -> quoted, pro only — mirrored by the Firestore rules).
   Future<String?> sendQuote({
     required ServiceRequest request,
     required double price,
     required String note,
   }) async {
-    if (!request.canTransitionTo(ServiceRequestStatus.accepted, ActorRole.pro) &&
-        request.status != ServiceRequestStatus.pending) {
+    if (!request.canTransitionTo(ServiceRequestStatus.quoted, ActorRole.pro)) {
       return 'Action non autorisée pour cette demande';
     }
     try {

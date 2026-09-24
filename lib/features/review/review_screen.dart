@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/utils/validators.dart';
@@ -49,12 +50,10 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
 
     String? error;
     try {
-      final firestore = ref.read(firestoreServiceProvider);
-      await firestore.createReview(review);
-      // Refresh the pro's aggregated rating (client-side aggregation).
-      await firestore.recomputeProRating(proId);
+      // UN seul batch : avis + compteurs du pro (exigé par les règles).
+      await ref.read(firestoreServiceProvider).createReview(review);
     } catch (e) {
-      error = e.toString();
+      error = ErrorMapper.message(e);
     }
 
     if (!mounted) return;

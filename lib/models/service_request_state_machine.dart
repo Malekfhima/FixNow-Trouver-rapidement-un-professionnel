@@ -13,12 +13,17 @@ enum ActorRole { client, pro, admin }
 /// Allowed flow (the "accepted" step after a quote is deliberate: the pro
 /// sends a quote, the client accepts it, then the pro starts the work):
 ///
-///   pending   -> accepted | declined | cancelled   (pro / pro / client)
+///   pending   -> accepted | declined | quoted | cancelled
+///               (pro / pro / pro / client)
 ///   accepted  -> inProgress | cancelled            (pro / client)
 ///   quoted    -> accepted (client accepts the quote) | cancelled (client)
 ///   inProgress-> completed                         (pro)
 ///
 /// Terminal states: completed, declined, cancelled.
+///
+/// NOTE: this table must stay EXACTLY in sync with `validTransition()` /
+/// the actor checks in firestore.rules (« Mes demandes » du pro envoie
+/// réellement le devis via pending -> quoted).
 extension ServiceRequestStateMachine on ServiceRequest {
   // ── Transition table ───────────────────────────────────────────────
   static const Map<ServiceRequestStatus, Map<ServiceRequestStatus, ActorRole>>
@@ -26,6 +31,7 @@ extension ServiceRequestStateMachine on ServiceRequest {
     ServiceRequestStatus.pending: {
       ServiceRequestStatus.accepted: ActorRole.pro,
       ServiceRequestStatus.declined: ActorRole.pro,
+      ServiceRequestStatus.quoted: ActorRole.pro,
       ServiceRequestStatus.cancelled: ActorRole.client,
     },
     ServiceRequestStatus.accepted: {

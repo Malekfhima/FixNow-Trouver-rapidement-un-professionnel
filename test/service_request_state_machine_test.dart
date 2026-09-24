@@ -17,17 +17,43 @@ ServiceRequest _req(ServiceRequestStatus status) => ServiceRequest(
 
 void main() {
   group('Machine à états serviceRequests — transitions valides', () {
-    test('pending : le pro accepte ou refuse, le client annule', () {
+    test(
+        'pending : le pro accepte, refuse ou propose un devis, le client annule',
+        () {
       final r = _req(ServiceRequestStatus.pending);
-      expect(r.allowedTransitions(ActorRole.pro),
-          [ServiceRequestStatus.accepted, ServiceRequestStatus.declined]);
+      expect(
+          r.allowedTransitions(ActorRole.pro),
+          [
+            ServiceRequestStatus.accepted,
+            ServiceRequestStatus.declined,
+            ServiceRequestStatus.quoted,
+          ],
+          reason: 'pending -> quoted permet à « Mes demandes » d\'envoyer le devis');
       expect(r.allowedTransitions(ActorRole.client),
           [ServiceRequestStatus.cancelled]);
       expect(r.canTransitionTo(ServiceRequestStatus.accepted, ActorRole.pro),
           isTrue);
+      expect(r.canTransitionTo(ServiceRequestStatus.quoted, ActorRole.pro),
+          isTrue);
       expect(r.canTransitionTo(ServiceRequestStatus.declined, ActorRole.client),
           isFalse,
           reason: 'seul le pro peut refuser');
+      expect(r.canTransitionTo(ServiceRequestStatus.quoted, ActorRole.client),
+          isFalse,
+          reason: 'le client ne peut pas se proposer un devis lui-même');
+    });
+
+    test('pending -> quoted n\'existe pas pour le client ni à l\'état initial', () {
+      expect(
+          _req(ServiceRequestStatus.quoted)
+              .canTransitionTo(ServiceRequestStatus.quoted, ActorRole.pro),
+          isFalse,
+          reason: 'quoted est déjà atteint');
+      expect(
+          _req(ServiceRequestStatus.pending)
+              .allowedTransitions(ActorRole.pro),
+          isNot(contains(ServiceRequestStatus.inProgress)),
+          reason: 'pas de saut d\'étape');
     });
 
     test('accepted : le pro démarre, le client annule', () {

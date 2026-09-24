@@ -2,12 +2,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Helper functions ──────────────────────────────────────────────
+    // ━━━ Helpers partagés ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     function isAuth() {
       return request.auth != null;
     }
 
-    // Cached user document of the caller (1 read per evaluation).
+    // Profil complet de l'appelant (1 lecture mise en cache par évaluation).
     function caller() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
@@ -17,35 +17,44 @@ service cloud.firestore {
     }
 
     function isClient() {
-      // Everyone can act as a client (book services), pros included.
+      // Tout compte authentifié peut réserver (pro inclus).
       return isAuth();
     }
 
     function isPro() {
-      // Pro capabilities via flag; legacy accounts may still use role == 'pro'.
-      // role() is tested first because legacy docs may lack the isPro field.
-      return isAuth() && (role() == 'pro' || caller().isPro == true);
+      return isAuth() && (role() == 'pro' || caller().get('isPro', false) == true);
     }
 
+    // ── Rôles : migration vers les custom claims ──────────────────────
+    // CIBLE : isAdmin() = isAuth() && request.auth.token.get('admin', false) == true
+    //         → plus aucune lecture de users/ à chaque évaluation de règle.
+    // EN COURS : le rôle legacy (users/{uid}.role == 'admin') reste accepté
+    //            pour ne casser aucun compte existant.
+    // PROCÉDURE : voir tool/set_custom_claims.js et CHANGELOG.md.
+    // 1) node tool/set_custom_claims.js <uid...>  (pose le claim admin)
+    // 2) une fois TOUS les admins migrés, remplacer le corps de isAdmin()
+    //    par la forme « cible » ci-dessus et redéployer.
     function isAdmin() {
-      return isAuth() && role() == 'admin';
+      return isAuth() && (
+        request.auth.token.get('admin', false) == true || role() == 'admin'
+      );
     }
 
     function isOwner(userId) {
       return isAuth() && request.auth.uid == userId;
     }
 
-    // ── Users collection ──────────────────────────────────────────────
+    // ━━━ users/{uid} — PROFIL PRIVÉ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // email / phone / fcmToken ne sont plus lisibles par tout le monde :
+    // les affichages publics (chat, avis, notifications) lisent
+    // publicProfiles/{uid} ci-dessous.
     match /users/{userId} {
-      // Anyone authenticated can read a user profile (needed for chat, reviews)
-      allow read: if isAuth();
+      allow read: if isOwner(userId) || isAdmin();
 
-      // Users can create their own profile
       allow create: if isOwner(userId);
 
-      // Users can update their own profile — but never their own admin role.
-      // Self-upgrade to pro (isPro + role == 'pro') is allowed; role and isPro
-      // must move together and never grant admin.
+      // Le propriétaire met à jour son profil — jamais son propre rôle
+      // admin. L'auto-promotion pro (role + isPro ensemble) reste autorisée.
       allow update: if isAdmin()
         || (isOwner(userId)
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isPro'])
@@ -57,196 +66,369 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'isPro'])
         );
 
-      // Only admins can delete users
       allow delete: if isAdmin();
     }
 
-    // ── Professionals collection ──────────────────────────────────────
+    // ━━━ publicProfiles/{uid} — IDENTITÉ PUBLIQUE ━━━━━━━━━━━━━━━━━━━━━
+    // Lisible par tout utilisateur connecté : nom, avatar, rôle affiché.
+    // Ne contient JAMAIS email / phone / fcmToken.
+    // NB : ce rôle est purement indicatif (affichage) — toute décision
+    // d'autorisation lit users/{uid}.role ou le custom claim.
+    match /publicProfiles/{uid} {
+      allow read: if isAuth();
+
+      allow create: if isOwner(uid)
+        && validPublicProfile(request.resource.data);
+
+      allow update: if (isOwner(uid) || isAdmin())
+        && validPublicProfile(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['name', 'avatarUrl', 'role']);
+
+      allow delete: if isOwner(uid) || isAdmin();
+
+      function validPublicProfile(data) {
+        return data.name is string
+          && data.name.size() <= 120
+          && (data.get('avatarUrl', null) == null || data.get('avatarUrl', '') is string)
+          && data.get('role', '') in ['client', 'pro', 'admin'];
+      }
+    }
+
+    // ━━━ professionals/{proId} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     match /professionals/{proId} {
-      // Anyone authenticated can read approved professionals
-      // Pros can read their own profile regardless of status
+      // Lecture : profils approuvés, son propre profil, ou admin.
       allow read: if isAuth() && (
-        resource.data.status == 'approved' ||
-        isOwner(proId) ||
-        isAdmin()
+        resource.data.status == 'approved' || isOwner(proId) || isAdmin()
       );
 
-      // Pros can create their own professional profile (first save after
-      // upgrading); admins can create demo/seed profiles (ids 'demo-*')
-      allow create: if (isOwner(proId) && isPro())
-        || (isAdmin() && proId.matches('demo-.*'));
+      // 1) CRÉATION : un pro ouvre toujours son profil en 'pending' avec
+      //    des notes à zéro → il ne peut JAMAIS s'auto-approuver.
+      //    L'admin conserve la création de ses démos (ids demo-*).
+      allow create: if (
+          isOwner(proId) && isPro()
+          && request.resource.data.status == 'pending'
+          && request.resource.data.get('ratingAvg', 0) == 0
+          && request.resource.data.get('ratingCount', 0) == 0
+          && request.resource.data.get('lastRatingReviewId', '') == ''
+        ) || (isAdmin() && proId.matches('demo-.*'));
 
-      // Pros can update their own profile (except status — admin validation only)
-      allow update: if isOwner(proId) && isPro() &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'ratingAvg', 'ratingCount']);
+      // 2) Le pro modifie son profil — jamais son statut ni ses notes.
+      allow update: if isOwner(proId) && isPro()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(
+          ['status', 'ratingAvg', 'ratingCount', 'lastRatingReviewId']
+        );
 
-      // Rating aggregation after a review (no Cloud Functions yet):
-      // any authenticated user EXCEPT the pro himself may write ONLY
-      // ratingAvg/ratingCount — a pro can never inflate his own rating.
-      // NOTE: a backend function should take this over in production.
-      allow update: if isAuth() && !isOwner(proId) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ratingAvg', 'ratingCount']);
+      // 3) COMpteurs de notes (sans Cloud Functions) :
+      //    autorisés UNIQUEMENT dans le même batch/transaction que la
+      //    création de l'avis qui les justifie, prouvée via getAfter().
+      //    Le client doit envoyer lastRatingReviewId = id de l'avis
+      //    (= requestId) ; la cohérence est vérifiée exactement :
+      //    ratingCount + 1 et ratingAvg = moyenne induite par le nouveau
+      //    avis (entier 1..5), donc bornée 1..5.
+      allow update: if isAuth() && !isOwner(proId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['ratingAvg', 'ratingCount', 'lastRatingReviewId'])
+        && ratingUpdateIsCoherent();
 
-      // Only admins can change professional status (approve/reject)
+      // 4) L'admin approuve / rejette / corrige (modération).
       allow update: if isAdmin();
 
-      // Only admins can delete professional profiles
       allow delete: if isAdmin();
+
+      // ── Cohérence de la mise à jour des notes ──────────────────────
+      // get()     = état AVANT le batch (l'avis n'existe pas encore)
+      // getAfter()= état APRÈS le batch (l'avis existe)
+      // → impossible d'incrémenter les compteurs sans créer l'avis
+      //   qui va avec, et impossible de recompter deux fois le même avis.
+      function reviewAfter() {
+        return getAfter(/databases/$(database)/documents/reviews/$(request.resource.data.lastRatingReviewId)).data;
+      }
+
+      function reviewDoesNotExistYet() {
+        return !exists(/databases/$(database)/documents/reviews/$(request.resource.data.lastRatingReviewId));
+      }
+
+      // Nouvelle moyenne implicite : avg' * count' - avg * count = note de l'avis.
+      function impliedRating() {
+        return request.resource.data.ratingAvg * request.resource.data.ratingCount
+          - resource.data.get('ratingAvg', 0) * resource.data.get('ratingCount', 0);
+      }
+
+      function ratingUpdateIsCoherent() {
+        return request.resource.data.lastRatingReviewId is string
+          && request.resource.data.lastRatingReviewId != resource.data.get('lastRatingReviewId', '')
+          && reviewDoesNotExistYet()
+          // L'avis doit exister APRÈS le batch, être signé par l'appelant
+          // et cibler ce professionnel.
+          && reviewAfter().requestId == request.resource.data.lastRatingReviewId
+          && reviewAfter().clientId == request.auth.uid
+          && reviewAfter().proId == proId
+          && reviewAfter().rating is int
+          && reviewAfter().rating >= 1
+          && reviewAfter().rating <= 5
+          // Compteur : +1 exactement.
+          && request.resource.data.ratingCount == resource.data.get('ratingCount', 0) + 1
+          // Moyenne recalculée : bornée 1..5 et égale à la note portée
+          // par l'avis (tolérance d'arrondi 1e-4).
+          && request.resource.data.ratingAvg >= 1
+          && request.resource.data.ratingAvg <= 5
+          && impliedRating() - reviewAfter().rating <= 0.0001
+          && impliedRating() - reviewAfter().rating >= -0.0001;
+      }
     }
 
-    // ── Service Requests ──────────────────────────────────────────────
+    // ━━━ serviceRequests/{requestId} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     match /serviceRequests/{requestId} {
-      // Client can read their own requests
-      // Pro can read requests assigned to them
-      // Admin can read all
+      // Lecture : le client émetteur, le pro ciblé, l'admin.
       allow read: if isAuth() && (
         resource.data.clientId == request.auth.uid ||
         resource.data.proId == request.auth.uid ||
         isAdmin()
       );
 
-      // Client can create a new request
-      allow create: if isClient() &&
-        request.resource.data.clientId == request.auth.uid;
+      // 1) CRÉATION (client uniquement) :
+      //    - statut 'pending' (aucune approbation anticipée)
+      //    - on ne peut pas se cibler soi-même
+      //    - aucun champ de devis / prix déjà renseigné
+      //    - la cible existe ET est approuvée par l'admin
+      allow create: if isClient()
+        && request.resource.data.clientId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.proId is string
+        && request.resource.data.proId != ''
+        && request.resource.data.proId != request.auth.uid
+        && request.resource.data.get('quotePrice', null) == null
+        && request.resource.data.get('quoteNote', null) == null
+        && request.resource.data.get('price', null) == null
+        && get(/databases/$(database)/documents/professionals/$(request.resource.data.proId)).data.status == 'approved';
 
-      // ── State machine (must mirror lib/models/service_request_state_machine.dart)
-      //   pending    -> accepted (pro) | declined (pro) | cancelled (client)
+      // ── Machine à états (miroir exact de
+      //    lib/models/service_request_state_machine.dart) ─────────────
+      //   pending    -> accepted (pro) | declined (pro) | quoted (pro) | cancelled (client)
       //   accepted   -> inProgress (pro) | cancelled (client)
-      //   quoted     -> accepted (client) | cancelled (client)
+      //   quoted     -> accepted (client, acceptation du devis) | cancelled (client)
       //   inProgress -> completed (pro)
-      // Terminal (completed / declined / cancelled): no transition.
-      function validTransition(from, to) {
-        return
-          (from == 'pending' && to == 'accepted') ||
-          (from == 'pending' && to == 'declined') ||
-          (from == 'pending' && to == 'cancelled') ||
-          (from == 'accepted' && to == 'inProgress') ||
-          (from == 'accepted' && to == 'cancelled') ||
-          (from == 'quoted' && to == 'accepted') ||
-          (from == 'quoted' && to == 'cancelled') ||
-          (from == 'inProgress' && to == 'completed');
+      //   completed / declined / cancelled : terminaux.
+      // Les clés immuables sont verrouillées pour TOUS les acteurs, et
+      // chaque acteur n'a le droit de modifier QUE ses propres champs,
+      // y compris lors d'un changement de statut.
+      function touchedKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      function immutableUnchanged() {
+        return !touchedKeys().hasAny(['clientId', 'proId', 'categoryId', 'createdAt']);
       }
 
       function fromStatus() { return resource.data.status; }
       function toStatus() { return request.resource.data.status; }
-      function isClientActor() { return resource.data.clientId == request.auth.uid; }
-      function isProActor() { return resource.data.proId == request.auth.uid; }
       function statusUnchanged() { return toStatus() == fromStatus(); }
 
-      // The update must be a valid transition by the right actor —
-      // OR a same-status partial edit (metadata, quote details…).
-      // NOTE: admins are NOT exempt from the state machine — even they
-      // cannot force an invalid transition (safest option, CHANGELOG).
-      // Admin write access to requests is read/serve-side only.
-      allow update: if (validTransition(fromStatus(), toStatus()) &&
-            ((toStatus() == 'cancelled' && isClientActor()) ||
-             (toStatus() == 'accepted' &&
-               ((fromStatus() == 'pending' && isProActor()) ||
-                (fromStatus() == 'quoted' && isClientActor()))) ||
-             (toStatus() == 'declined' && isProActor()) ||
-             (toStatus() == 'inProgress' && isProActor()) ||
-             (toStatus() == 'completed' && isProActor())))
-        || ((isClientActor() || isProActor()) && statusUnchanged());
+      // Le client ne modifie que : status, description, photos, address,
+      // scheduledDate (+ updatedAt, horodatage technique).
+      function clientKeysOk() {
+        return touchedKeys().hasOnly(
+          ['status', 'description', 'photos', 'address', 'scheduledDate', 'updatedAt']
+        );
+      }
 
-      // Only admins can delete requests
+      // Le pro ne modifie que : status, quotePrice, quoteNote, price.
+      function proKeysOk() {
+        return touchedKeys().hasOnly(['status', 'quotePrice', 'quoteNote', 'price', 'updatedAt']);
+      }
+
+      function clientTransitionOk() {
+        return statusUnchanged()
+          || (fromStatus() == 'pending'    && toStatus() == 'cancelled')
+          || (fromStatus() == 'accepted'   && toStatus() == 'cancelled')
+          || (fromStatus() == 'quoted'     && toStatus() == 'cancelled')
+          || (fromStatus() == 'quoted'     && toStatus() == 'accepted');
+      }
+
+      function proTransitionOk() {
+        return statusUnchanged()
+          || (fromStatus() == 'pending'    && (toStatus() == 'accepted'
+                                            || toStatus() == 'declined'
+                                            || toStatus() == 'quoted'))
+          || (fromStatus() == 'accepted'   && toStatus() == 'inProgress')
+          || (fromStatus() == 'inProgress' && toStatus() == 'completed');
+      }
+
+      // 2) MISE À JOUR : clés immuables + clés par acteur + machine à états.
+      //    L'admin n'est PAS exempté (il n'a aucun droit d'écriture ici).
+      allow update: if immutableUnchanged()
+        && (
+          (resource.data.clientId == request.auth.uid
+            && clientKeysOk()
+            && clientTransitionOk())
+          || (resource.data.proId == request.auth.uid
+            && proKeysOk()
+            && proTransitionOk())
+        );
+
       allow delete: if isAdmin();
     }
 
-    // ── Chats ─────────────────────────────────────────────────────────
+    // ━━━ chats + messages ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     match /chats/{chatId} {
-      // Only chat participants can read/update/delete a conversation
-      allow read, update, delete: if isAuth() && (
+      // Seuls les participants lisent / suppriment la conversation.
+      allow read, delete: if isAuth() && (
         resource.data.clientId == request.auth.uid ||
         resource.data.proId == request.auth.uid
       );
 
-      // Only participants can create a conversation, with themselves on one side
+      // Création : le créateur doit être l'un des deux participants.
       allow create: if isAuth() && (
         request.resource.data.clientId == request.auth.uid ||
         request.resource.data.proId == request.auth.uid
       );
 
+      // Mise à jour (lastMessage, compteurs non lus…) :
+      // clientId / proId sont IMMUABLES.
+      allow update: if isAuth()
+        && (resource.data.clientId == request.auth.uid
+            || resource.data.proId == request.auth.uid)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+             .hasAny(['clientId', 'proId']);
+
       match /messages/{messageId} {
-        // Only chat participants can read messages
-        allow read: if isAuth() && (
-          get(/databases/$(database)/documents/chats/$(chatId)).data.clientId == request.auth.uid ||
-          get(/databases/$(database)/documents/chats/$(chatId)).data.proId == request.auth.uid
-        );
+        function inChat() {
+          return isAuth() && (
+            get(/databases/$(database)/documents/chats/$(chatId)).data.clientId == request.auth.uid ||
+            get(/databases/$(database)/documents/chats/$(chatId)).data.proId == request.auth.uid
+          );
+        }
 
-        // Only chat participants can send messages, and only as themselves
-        allow create: if isAuth() && (
-          get(/databases/$(database)/documents/chats/$(chatId)).data.clientId == request.auth.uid ||
-          get(/databases/$(database)/documents/chats/$(chatId)).data.proId == request.auth.uid
-        ) && request.resource.data.senderId == request.auth.uid;
+        // Lecture : réservée aux participants.
+        allow read: if inChat();
 
-        // Participants can update read status
-        allow update: if isAuth() && (
-          get(/databases/$(database)/documents/chats/$(chatId)).data.clientId == request.auth.uid ||
-          get(/databases/$(database)/documents/chats/$(chatId)).data.proId == request.auth.uid
-        );
+        // Écriture : participant, envoyé SOUS son propre identifiant,
+        // texte présent, string et <= 2000 caractères.
+        allow create: if inChat()
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 2000
+          && (request.resource.data.get('imageUrl', null) == null
+              || request.resource.data.get('imageUrl', '') is string);
+
+        // Mise à jour : uniquement l'indicateur 'read' ( accusé de lecture ).
+        allow update: if inChat()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       }
     }
 
-    // ── Reviews ───────────────────────────────────────────────────────
+    // ━━━ reviews/{reviewId} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     match /reviews/{reviewId} {
-      // Anyone authenticated can read reviews
       allow read: if isAuth();
 
-      // One review per completed service request:
-      // - caller must be the client of the request
-      // - the request must be completed
-      // - no existing review for that request (uniqueness via unique requestId doc id)
+      // Un avis par demande terminée :
+      // - auteur = client de la demande, doc id = requestId (unicité)
+      // - demande 'completed'
+      // - review.proId = pro réellement assigné à la demande
+      // - rating ENTIER 1..5, commentaire string <= 1000 caractères
       allow create: if isClient()
         && request.resource.data.clientId == request.auth.uid
+        && reviewId == request.resource.data.requestId
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.comment is string
+        && request.resource.data.comment.size() <= 1000
         && get(/databases/$(database)/documents/serviceRequests/$(request.resource.data.requestId)).data.status == 'completed'
         && get(/databases/$(database)/documents/serviceRequests/$(request.resource.data.requestId)).data.clientId == request.auth.uid
-        && reviewId == request.resource.data.requestId;
+        && get(/databases/$(database)/documents/serviceRequests/$(request.resource.data.requestId)).data.proId == request.resource.data.proId;
 
-      // No updates or deletions allowed for reviews (immutable)
+      // Les avis sont immuables.
       allow update, delete: if false;
     }
 
-    // ── Notifications (in-app, client-side events) ───────────────────
+    // ━━━ notifications (événements client-side, sans Cloud Functions) ━
+    // MIGRATION FUTURE (documentée) : basculer la création vers des
+    // Cloud Functions (plan Blaze) — le client ne serait plus capable
+    // d'inventer un événement, et le lien actor↔destinataire serait
+    // vérifié côté serveur sans get() coûteux.
     match /notifications/{notificationId} {
-      // Only the recipient can read / mark-as-read / delete.
-      allow read, update, delete: if isAuth()
+      allow read, delete: if isAuth()
         && resource.data.userId == request.auth.uid;
 
-      // Any authenticated user can create a notification for someone else
-      // (new message, quote received…). Without Cloud Functions this is
-      // client-side, so we bind every notification to its real actor.
+      // Seul le destinataire coche « lu » (et rien d'autre).
+      allow update: if isAuth()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+
+      // 1) acteur = appelant, destinataire = chaîne
+      // 2) type dans la liste blanche, textes bornés
+      // 3) lien RÉEL actor↔destinataire prouvé par get() :
+      //    - un chat dont les deux participants sont actor et destinataire
+      //    - OU une serviceRequest partagée entre eux
+      //    - OU la validation d'un pro (proApproved/proRejected) par un admin
       allow create: if isAuth()
         && request.resource.data.userId is string
-        && request.resource.data.actorId == request.auth.uid;
+        && request.resource.data.actorId == request.auth.uid
+        && request.resource.data.type in [
+          'newMessage', 'quoteReceived', 'requestAccepted', 'requestDeclined',
+          'requestCompleted', 'requestCancelled', 'proApproved', 'proRejected',
+          'generic'
+        ]
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 200
+        && request.resource.data.body is string
+        && request.resource.data.body.size() <= 2000
+        && notifLinkOk();
+
+      function chatDoc() {
+        return get(/databases/$(database)/documents/chats/$(request.resource.data.relatedId)).data;
+      }
+
+      function requestDoc() {
+        return get(/databases/$(database)/documents/serviceRequests/$(request.resource.data.relatedId)).data;
+      }
+
+      function chatLink() {
+        return exists(/databases/$(database)/documents/chats/$(request.resource.data.relatedId))
+          && ((chatDoc().clientId == request.auth.uid && chatDoc().proId == request.resource.data.userId)
+           || (chatDoc().clientId == request.resource.data.userId && chatDoc().proId == request.auth.uid));
+      }
+
+      function requestLink() {
+        return exists(/databases/$(database)/documents/serviceRequests/$(request.resource.data.relatedId))
+          && ((requestDoc().clientId == request.auth.uid && requestDoc().proId == request.resource.data.userId)
+           || (requestDoc().clientId == request.resource.data.userId && requestDoc().proId == request.auth.uid));
+      }
+
+      function proApprovalLink() {
+        return request.resource.data.type in ['proApproved', 'proRejected']
+          && request.resource.data.relatedId == request.resource.data.userId
+          && exists(/databases/$(database)/documents/professionals/$(request.resource.data.relatedId))
+          && isAdmin();
+      }
+
+      function notifLinkOk() {
+        return request.resource.data.relatedId is string
+          && (chatLink() || requestLink() || proApprovalLink());
+      }
     }
 
-    // ── Categories (admin only) ───────────────────────────────────────
+    // ━━━ categories (admin) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     match /categories/{categoryId} {
-      // Anyone authenticated can read categories
       allow read: if isAuth();
-
-      // Only admins can manage categories
       allow write: if isAdmin();
     }
 
-    // ── Reports ───────────────────────────────────────────────────────
+    // ━━━ reports (modération) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     match /reports/{reportId} {
-      // Reporter can read their own report, admins can read all
       allow read: if isAuth() && (
-        resource.data.reporterId == request.auth.uid ||
-        isAdmin()
+        resource.data.reporterId == request.auth.uid || isAdmin()
       );
 
-      // Any authenticated user can create a report bound to themselves
       allow create: if isAuth()
         && request.resource.data.reporterId == request.auth.uid
         && request.resource.data.status == 'open';
 
-      // Only admins can update reports (investigate, resolve/dismiss)
       allow update: if isAdmin()
         && request.resource.data.status in ['resolved', 'dismissed'];
 
-      // Only admins can delete reports
       allow delete: if isAdmin();
     }
   }

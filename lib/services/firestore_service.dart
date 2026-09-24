@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fixnow/models/user_model.dart';
 import 'package:fixnow/models/professional_model.dart';
@@ -21,8 +22,24 @@ class FirestoreService {
   DocumentReference<Map<String, dynamic>> _userDoc(String uid) =>
       _db.collection('users').doc(uid);
 
+  DocumentReference<Map<String, dynamic>> _publicProfileDoc(String uid) =>
+      _db.collection('publicProfiles').doc(uid);
+
+  Map<String, dynamic> _publicFields(AppUser user) => {
+        'name': user.name,
+        'avatarUrl': user.avatarUrl,
+        'role': user.role.name,
+      };
+
   Future<void> createUser(AppUser user) async {
+    // Écritures SÉQUENTIELLES : le document public est créé après le
+    // document privé (les règles exigent users existant pour le rôle).
     await _userDoc(user.uid).set(user.toFirestore());
+    try {
+      await _publicProfileDoc(user.uid).set(_publicFields(user));
+    } catch (e) {
+      debugPrint('publicProfiles create failed: $e');
+    }
   }
 
   Future<AppUser?> getUser(String uid) async {
@@ -38,15 +55,50 @@ class FirestoreService {
     });
   }
 
+  /// Lecture d'un profil PUBLIC (nom / avatar / rôle) — la seule chose
+  /// que les autres utilisateurs peuvent lire (users/{uid} est privé :
+  /// email, téléphone et fcmToken ne sont jamais exposés).
+  Future<AppUser?> getPublicProfile(String uid) async {
+    final doc = await _publicProfileDoc(uid).get();
+    if (!doc.exists) return null;
+    return AppUser.fromPublicProfile(doc);
+  }
+
   Future<void> updateUser(String uid, Map<String, dynamic> data) async {
     await _userDoc(uid).update(data);
+    // Republie les champs publics (best-effort, séquentiel).
+    if (data.containsKey('name') ||
+        data.containsKey('avatarUrl') ||
+        data.containsKey('role')) {
+      await _mirrorPublicProfile(uid);
+    }
+  }
+
+  /// Recopie nom / avatar / rôle depuis users/{uid} vers publicProfiles/{uid}.
+  /// Lecture fraîche du document privé garantit un rôle toujours valide.
+  Future<void> _mirrorPublicProfile(String uid) async {
+    try {
+      final snap = await _userDoc(uid).get();
+      final data = snap.data();
+      if (data == null) return;
+      await _publicProfileDoc(uid).set(
+        {
+          'name': data['name'] ?? '',
+          'avatarUrl': data['avatarUrl'],
+          'role': data['role'] ?? UserRole.client.name,
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      debugPrint('publicProfiles mirror failed: $e');
+    }
   }
 
   /// Creates the user profile if missing (phone auth / Google first login).
   Future<void> ensureUser(AppUser user) async {
     final doc = await _userDoc(user.uid).get();
     if (!doc.exists) {
-      await _userDoc(user.uid).set(user.toFirestore());
+      await createUser(user);
     }
   }
 
@@ -237,13 +289,33 @@ class FirestoreService {
     return snapshot.docs.map((doc) => Review.fromFirestore(doc)).toList();
   }
 
-  /// Creates a review. The document id MUST be the requestId (uniqueness
-  /// enforced by the Firestore rules: one review per completed request).
+  /// Creates a review AND the pro's rating counters in ONE batch.
+  ///
+  /// The Firestore rules only accept a ratingAvg/ratingCount update when
+  /// the review that justifies it is created in the SAME transaction,
+  /// proven via getAfter() — see `lastRatingReviewId` in firestore.rules.
+  /// The document id MUST be the requestId (uniqueness enforced by the
+  /// rules: one review per completed request).
   Future<void> createReview(Review review) async {
-    await _db
-        .collection('reviews')
-        .doc(review.requestId)
-        .set(review.toFirestore());
+    final proRef = _proDoc(review.proId);
+    final reviewRef = _db.collection('reviews').doc(review.requestId);
+
+    // Compteurs calculés depuis l'état courant du pro (moyenne exacte).
+    final proSnap = await proRef.get();
+    final proData = proSnap.data();
+    final oldCount = ((proData?['ratingCount'] ?? 0) as num).toInt();
+    final oldAvg = ((proData?['ratingAvg'] ?? 0) as num).toDouble();
+    final newCount = oldCount + 1;
+    final newAvg = (oldAvg * oldCount + review.rating) / newCount;
+
+    final batch = _db.batch();
+    batch.set(reviewRef, review.toFirestore());
+    batch.update(proRef, {
+      'ratingAvg': newAvg,
+      'ratingCount': newCount,
+      'lastRatingReviewId': review.requestId,
+    });
+    await batch.commit();
   }
 
   /// Whether a review already exists for a given service request.
@@ -253,26 +325,11 @@ class FirestoreService {
   }
 
   // ── Pro rating aggregation ───────────────────────────────────────
-
-  /// Recomputes a pro's ratingAvg / ratingCount from all their reviews.
-  /// Called after a new review; also refreshes profile completeness.
-  Future<void> recomputeProRating(String proId) async {
-    final snapshot = await _db
-        .collection('reviews')
-        .where('proId', isEqualTo: proId)
-        .get();
-    final count = snapshot.docs.length;
-    final avg = count == 0
-        ? 0.0
-        : snapshot.docs
-                .map((doc) => (doc.data()['rating'] ?? 0) as num)
-                .reduce((a, b) => a + b) /
-            count;
-    await _proDoc(proId).update({
-      'ratingAvg': avg,
-      'ratingCount': count,
-    });
-  }
+  //
+  // NOTE : la mise à jour « nue » de ratingAvg / ratingCount est REFUSÉE
+  // par les règles Firestore (faille close) : l'agrégation n'a lieu QUE
+  // dans le batch créé par createReview() (preuve via getAfter() sur
+  // l'avis + lastRatingReviewId).
 
   // ── Chats ────────────────────────────────────────────────────────
 

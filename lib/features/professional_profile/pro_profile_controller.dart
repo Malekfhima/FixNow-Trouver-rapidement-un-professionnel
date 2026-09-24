@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/services/firestore_service.dart';
 import 'package:fixnow/models/professional_model.dart';
 import 'package:fixnow/models/review_model.dart';
@@ -55,7 +56,7 @@ class ProProfileController extends StateNotifier<ProProfileState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: e.toString(),
+        error: ErrorMapper.message(e),
       );
     }
   }

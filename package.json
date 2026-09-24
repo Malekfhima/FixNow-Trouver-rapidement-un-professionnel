@@ -3,11 +3,14 @@
   "private": true,
   "description": "FixNow - Marketplace locale de services a domicile (regles Firestore + outillage)",
   "scripts": {
-    "test:rules": "firebase emulators:exec --only firestore \"jest --runInBand\""
+    "test:rules": "firebase emulators:exec --only firestore \"jest --runInBand\"",
+    "tool:claims": "node tool/set_custom_claims.js",
+    "tool:public-profiles": "node tool/backfill_public_profiles.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
     "firebase": "^12.19.0",
+    "firebase-admin": "^13.0.0",
     "jest": "^30.5.2"
   }
 }

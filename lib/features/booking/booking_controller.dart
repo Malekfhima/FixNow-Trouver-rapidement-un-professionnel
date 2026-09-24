@@ -52,8 +52,8 @@ class BookingController extends StateNotifier<BookingState> {
     required String categoryId,
     required String description,
     required String address,
-    required DateTime? scheduledDate,
-    double? price,
+    required    DateTime? scheduledDate,
+    double? budget,
     List<XFile> photos = const [],
   }) async {
     final user = _ref.read(currentUserProvider);
@@ -117,7 +117,7 @@ class BookingController extends StateNotifier<BookingState> {
         photos: photoUrls,
         address: address.trim(),
         scheduledDate: scheduledDate,
-        price: price,
+        budget: budget,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -175,7 +175,8 @@ class BookingController extends StateNotifier<BookingState> {
     try {
       await _firestoreService.updateServiceRequest(request.id, {
         'status': ServiceRequestStatus.accepted.name,
-        'price': request.quotePrice,
+        // NB : le client ne touche JAMAIS à `price` (réservé au pro dans
+        // les règles) — le prix convenu reste lisible via quotePrice.
       });
 
       // Notify the pro (best-effort).

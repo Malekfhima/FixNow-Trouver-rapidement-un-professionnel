@@ -247,18 +247,18 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
             ),
           ],
 
-          if (request.price != null &&
-              request.status != ServiceRequestStatus.quoted) ...[
+          if (request.price != null || request.budget != null)
+            ...[
             const SizedBox(height: AppSpacing.md),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  request.quotePrice != null ? 'Prix convenu' : 'Budget estimé',
+                  _priceLabel,
                   style: AppTextStyles.bodySmall,
                 ),
                 Text(
-                  '${request.price!.toInt()} €',
+                  '${(_priceValue ?? 0).toInt()} €',
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w700,
@@ -321,6 +321,28 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
         ],
       ),
     );
+  }
+
+  /// Prix affiché : le prix convenu (price, ou quotePrice une fois le
+  /// devis accepté) prime sur le budget indicatif du client.
+  double? get _priceValue {
+    final r = widget.request;
+    final agreed = r.price ??
+        (r.status == ServiceRequestStatus.accepted ||
+                r.status == ServiceRequestStatus.inProgress ||
+                r.status == ServiceRequestStatus.completed
+            ? r.quotePrice
+            : null);
+    return agreed ?? r.budget;
+  }
+
+  String get _priceLabel {
+    final r = widget.request;
+    final agreed = r.price != null ||
+        (r.status != ServiceRequestStatus.quoted &&
+            r.status != ServiceRequestStatus.pending &&
+            r.quotePrice != null);
+    return agreed ? 'Prix convenu' : 'Budget estimé';
   }
 
   Color _getStatusColor(ServiceRequestStatus status) {

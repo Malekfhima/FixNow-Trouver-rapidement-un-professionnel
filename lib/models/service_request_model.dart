@@ -18,6 +18,12 @@ class ServiceRequest {
   final String description;
   final List<String> photos;
   final ServiceRequestStatus status;
+
+  /// Budget indicatif saisi PAR LE CLIENT à la création.
+  /// Le prix convenu, lui, est uniquement [price] (écrit par le pro) :
+  /// les règles Firestore interdisent price / quotePrice / quoteNote
+  /// sur une création.
+  final double? budget;
   final double? price;
   final double? quotePrice;
   final String? quoteNote;
@@ -34,6 +40,7 @@ class ServiceRequest {
     required this.description,
     this.photos = const [],
     this.status = ServiceRequestStatus.pending,
+    this.budget,
     this.price,
     this.quotePrice,
     this.quoteNote,
@@ -56,6 +63,7 @@ class ServiceRequest {
         (e) => e.name == data['status'],
         orElse: () => ServiceRequestStatus.pending,
       ),
+      budget: data['budget']?.toDouble(),
       price: data['price']?.toDouble(),
       quotePrice: data['quotePrice']?.toDouble(),
       quoteNote: data['quoteNote'],
@@ -74,6 +82,7 @@ class ServiceRequest {
       'description': description,
       'photos': photos,
       'status': status.name,
+      'budget': budget,
       'price': price,
       'quotePrice': quotePrice,
       'quoteNote': quoteNote,
@@ -90,6 +99,7 @@ class ServiceRequest {
     String? description,
     List<String>? photos,
     ServiceRequestStatus? status,
+    double? budget,
     double? price,
     double? quotePrice,
     String? quoteNote,
@@ -104,6 +114,7 @@ class ServiceRequest {
       description: description ?? this.description,
       photos: photos ?? this.photos,
       status: status ?? this.status,
+      budget: budget ?? this.budget,
       price: price ?? this.price,
       quotePrice: quotePrice ?? this.quotePrice,
       quoteNote: quoteNote ?? this.quoteNote,

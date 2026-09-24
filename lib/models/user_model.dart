@@ -52,6 +52,28 @@ class AppUser {
     );
   }
 
+  /// Lit un profil PUBLIC (publicProfiles/{uid}) : nom, avatar et rôle.
+  ///
+  /// C'est la seule source autorisée pour afficher UN AUTRE utilisateur
+  /// (chat, avis…) depuis la restriction de `users/{uid}` aux propriétaires
+  /// et admins. Les champs privés (email, téléphone, fcmToken) restent vides.
+  factory AppUser.fromPublicProfile(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final role = UserRole.values.firstWhere(
+      (e) => e.name == data['role'],
+      orElse: () => UserRole.client,
+    );
+    return AppUser(
+      uid: doc.id,
+      role: role,
+      isPro: role == UserRole.pro,
+      name: data['name'] ?? '',
+      email: '',
+      avatarUrl: data['avatarUrl'],
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+    );
+  }
+
   Map<String, dynamic> toFirestore() {
     return {
       'role': role.name,

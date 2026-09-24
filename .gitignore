@@ -47,3 +47,10 @@ app.*.map.json
 # Node (tests des règles Firestore)
 node_modules/
 .jest/
+
+# Sécrets — jamais commités (App Check, Admin SDK)
+tool/serviceAccount*.json
+**/serviceAccount*.json
+.env
+.env.*
+app_check_debug_token.txt
