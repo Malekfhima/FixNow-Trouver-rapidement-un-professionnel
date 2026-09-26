@@ -8,6 +8,7 @@ import 'package:fixnow/core/widgets/app_avatar.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/widgets/outline_button.dart';
 import 'package:fixnow/core/widgets/skeleton.dart';
+import 'package:fixnow/core/widgets/star_rating.dart';
 import 'package:fixnow/features/professional_profile/pro_profile_controller.dart';
 import 'package:fixnow/models/review_model.dart';
 import 'package:intl/intl.dart';
@@ -148,11 +149,11 @@ class ProProfileScreen extends ConsumerWidget {
                                       ),
                                       const SizedBox(width: AppSpacing.sm),
                                     ],
-                                    const Icon(Icons.star,
-                                        color: AppColors.warning, size: 16),
-                                    Text(
-                                      ' ${pro.ratingAvg.toStringAsFixed(1)} (${pro.ratingCount} avis)',
-                                      style: AppTextStyles.bodySmall,
+                                    StarRating(
+                                      rating: pro.ratingAvg,
+                                      size: 16,
+                                      showLabel: true,
+                                      reviewCount: pro.ratingCount,
                                     ),
                                   ],
                                 ),
@@ -338,13 +339,7 @@ class _ReviewTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              ...List.generate(5, (i) {
-                return Icon(
-                  i < review.rating ? Icons.star : Icons.star_border,
-                  size: 16,
-                  color: AppColors.warning,
-                );
-              }),
+              StarRating(rating: review.rating.toDouble(), size: 16),
               const Spacer(),
               Text(
                 DateFormat('dd/MM/yyyy').format(review.createdAt),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
+import 'package:fixnow/core/widgets/star_rating.dart';
 import 'package:fixnow/core/widgets/app_avatar.dart';
 
 /// Horizontal card showing a professional in the "Popular near you" list.
@@ -77,20 +78,13 @@ class ProCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
-                        // Rating (couleur « texte » du thème : contraste AA)
-                        Icon(Icons.star,
-                            color: context.semanticColors.warning, size: 14),
-                        const SizedBox(width: 2),
-                        Text(
-                          rating.toStringAsFixed(1),
-                          style: AppTextStyles.bodySmall.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: colors.onSurface,
-                          ),
-                        ),
-                        Text(
-                          ' ($reviewCount)',
-                          style: AppTextStyles.caption,
+                        // Rating par étoiles (couleur « texte » du thème :
+                        // contraste AA, demi-étoiles précises).
+                        StarRating(
+                          rating: rating,
+                          size: 14,
+                          showLabel: true,
+                          reviewCount: reviewCount,
                         ),
                       ],
                     ),
