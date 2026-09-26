@@ -2,6 +2,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Thrown when the user closes the Google account sheet without choosing
+/// an account — not an error worth showing as a failure.
+class GoogleSignInAbortedException implements Exception {
+  const GoogleSignInAbortedException();
+
+  @override
+  String toString() => 'google sign-in aborted';
+}
+
 /// Provides the current auth state stream.
 final authStateProvider = StreamProvider<User?>((ref) {
   return FirebaseAuth.instance.authStateChanges();
@@ -54,14 +63,33 @@ class FirebaseAuthService {
 
   // ── Google Sign-In ───────────────────────────────────────────────
 
+  /// Sign-in via Google.
+  ///
+  /// Throws [GoogleSignInAbortedException] when the user closes the Google
+  /// sheet. Any other failure (misconfiguration, missing SHA-1, missing
+  /// `oauth_client` in google-services.json) surfaces as a
+  /// [FirebaseAuthException] / [PlatformException] the caller can report.
   Future<UserCredential> signInWithGoogle() async {
-    final googleUser = await _google.signIn();
-    if (googleUser == null) throw Exception('Google sign-in aborted');
+    final GoogleSignInAccount? googleUser = await _google.signIn();
+    if (googleUser == null) {
+      throw const GoogleSignInAbortedException();
+    }
 
     final googleAuth = await googleUser.authentication;
+    final idToken = googleAuth.idToken;
+    final accessToken = googleAuth.accessToken;
+    if (idToken == null && accessToken == null) {
+      throw FirebaseAuthException(
+        code: 'google-missing-token',
+        message:
+            'Google n\'a renvoy\u00e9 aucun jeton. V\u00e9rifiez le SHA-1/SHA-256 de '
+            'l\'application dans la console Firebase (oauth_client).',
+      );
+    }
+
     final credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
+      accessToken: accessToken,
+      idToken: idToken,
     );
 
     return await _auth.signInWithCredential(credential);

@@ -10,6 +10,24 @@ import 'package:fixnow/models/category_model.dart';
 import 'package:fixnow/models/review_model.dart';
 import 'package:fixnow/models/chat_model.dart';
 import 'package:fixnow/models/notification_model.dart';
+import 'package:fixnow/core/constants/app_constants.dart';
+
+/// One page of professionals plus the cursor needed to fetch the next page.
+class ProfessionalPage {
+  final List<Professional> items;
+
+  /// Cursor to pass as `startAfter` for the next page (null when empty).
+  final DocumentSnapshot? lastDocument;
+
+  /// Whether more documents exist after this page.
+  final bool hasMore;
+
+  const ProfessionalPage({
+    required this.items,
+    this.lastDocument,
+    required this.hasMore,
+  });
+}
 
 /// Central service for all Firestore read/write operations.
 class FirestoreService {
@@ -144,6 +162,44 @@ class FirestoreService {
 
     final snapshot = await query.limit(50).get();
     return snapshot.docs.map((doc) => Professional.fromFirestore(doc)).toList();
+  }
+
+  /// Paginated variant of [searchProfessionals].
+  ///
+  /// Orders by document id (a single-field index, always present — no
+  /// composite index required) so `startAfter` is deterministic and pages
+  /// never overlap or skip a document.
+  ///
+  /// [startAfter] is the [ProfessionalPage.lastDocument] of the previous page.
+  /// One extra document is requested to know whether another page exists.
+  Future<ProfessionalPage> searchProfessionalsPage({
+    String? category,
+    int limit = AppConstants.searchResultsLimit,
+    DocumentSnapshot? startAfter,
+  }) async {
+    Query query = _db
+        .collection('professionals')
+        .where('status', isEqualTo: 'approved');
+
+    if (category != null && category.isNotEmpty) {
+      query = query.where('categories', arrayContains: category);
+    }
+
+    query = query.orderBy(FieldPath.documentId);
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+
+    final snapshot = await query.limit(limit + 1).get();
+    final docs = snapshot.docs;
+    final hasMore = docs.length > limit;
+    final pageDocs = hasMore ? docs.sublist(0, limit) : docs;
+
+    return ProfessionalPage(
+      items: pageDocs.map((doc) => Professional.fromFirestore(doc)).toList(),
+      lastDocument: pageDocs.isNotEmpty ? pageDocs.last : startAfter,
+      hasMore: hasMore,
+    );
   }
 
   // ── Service Requests ─────────────────────────────────────────────

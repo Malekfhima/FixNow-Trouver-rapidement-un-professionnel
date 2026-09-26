@@ -20,6 +20,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
 
   // Noms identiques à ceux enregistrés dans Firestore (pro.categories) —
   // garantit que le filtre `arrayContains` fonctionne.
@@ -62,12 +63,22 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
         ref.read(searchControllerProvider.notifier).updateCategory(_categories[_tabController.index]);
       }
     });
+
+    // Pagination : charge la page suivante ~300 px avant la fin de la liste.
+    _scrollController.addListener(() {
+      if (!_scrollController.hasClients) return;
+      final position = _scrollController.position;
+      if (position.pixels >= position.maxScrollExtent - 300) {
+        ref.read(searchControllerProvider.notifier).loadMore();
+      }
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -220,10 +231,29 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                     : searchState.results.isEmpty
                         ? _buildEmptyState()
                         : ListView.separated(
+                            controller: _scrollController,
                             padding: const EdgeInsets.all(AppSpacing.xl),
-                            itemCount: searchState.results.length,
+                            itemCount: searchState.results.length +
+                                (searchState.isLoadingMore ? 1 : 0),
                             separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.lg),
                             itemBuilder: (context, index) {
+                              if (index >= searchState.results.length) {
+                                // Pied de liste : chargement de la page suivante.
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    vertical: AppSpacing.lg,
+                                  ),
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
                               final pro = searchState.results[index];
                               return ProCard(
                                 name: pro.name,

@@ -63,7 +63,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1042678564340',
     projectId: 'fixnow-dd022',
     storageBucket: 'fixnow-dd022.firebasestorage.app',
-    iosBundleId: 'com.example.fixnow',
+    iosBundleId: 'com.fixnow.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -72,7 +72,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1042678564340',
     projectId: 'fixnow-dd022',
     storageBucket: 'fixnow-dd022.firebasestorage.app',
-    iosBundleId: 'com.example.fixnow',
+    iosBundleId: 'com.fixnow.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

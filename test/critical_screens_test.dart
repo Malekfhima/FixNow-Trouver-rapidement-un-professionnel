@@ -1,4 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart' show GeoPoint;
+import 'package:cloud_firestore/cloud_firestore.dart'
+    show GeoPoint, DocumentSnapshot;
 import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -45,6 +46,19 @@ class _FakeFirestoreService extends FirestoreService {
     if (failSearch) throw Exception('réseau indisponible');
     if (category == null || category == 'Tous') return pros;
     return pros.where((p) => p.categories.contains(category)).toList();
+  }
+
+  @override
+  Future<ProfessionalPage> searchProfessionalsPage({
+    String? category,
+    int limit = 50,
+    DocumentSnapshot? startAfter,
+  }) async {
+    if (failSearch) throw Exception('réseau indisponible');
+    final filtered = category == null || category == 'Tous'
+        ? pros
+        : pros.where((p) => p.categories.contains(category)).toList();
+    return ProfessionalPage(items: filtered, hasMore: false);
   }
 
   @override

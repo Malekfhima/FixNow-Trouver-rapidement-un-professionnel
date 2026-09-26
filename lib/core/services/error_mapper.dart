@@ -3,6 +3,8 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:fixnow/services/firebase_auth_service.dart'
+    show GoogleSignInAbortedException;
 
 /// Single place that converts technical exceptions into clear,
 /// jargon-free French messages for the user.
@@ -14,6 +16,9 @@ class ErrorMapper {
 
   /// Returns a user-facing French message for [error].
   static String message(Object error) {
+    if (error is GoogleSignInAbortedException) {
+      return 'Connexion Google annulée.';
+    }
     if (error is FirebaseAuthException) return _auth(error);
     if (error is FirebaseException) return _firestore(error);
     if (error is TimeoutException) {
@@ -70,6 +75,8 @@ class ErrorMapper {
         return 'Cette méthode de connexion est désactivée.';
       case 'google-account':
         return 'Ce compte utilise la connexion Google : connectez-vous avec Google (aucun mot de passe à réinitialiser).';
+      case 'google-missing-token':
+        return 'Connexion Google impossible : empreinte SHA-1/SHA-256 de l\'application manquante dans la console Firebase.';
     }
     _log(e);
     return 'Connexion impossible. Veuillez réessayer.';
