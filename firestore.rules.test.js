@@ -1253,4 +1253,28 @@ describe('faille 10 : rôles — migration vers les custom claims', () => {
     const db = authedDb('notAdmin', 'client');
     await assertFails(getDoc(doc(db, 'users', 'otherUser')));
   });
+
+  test("FAILLE (post-migration) : role 'admin' Firestore SANS custom claim = aucun droit admin", async () => {
+    // Le document users porte role = 'admin' mais le jeton n'a PAS le
+    // custom claim : depuis la fin de la migration, ce compte n'est plus
+    // admin (le fallback legacy role() == 'admin' a été retiré).
+    await seedUser('legacyAdmin', 'admin');
+    await seedUser('victimLegacy', 'client');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'professionals', 'pLegacy'), {
+        categories: ['Plomberie'], status: 'pending',
+      });
+    });
+
+    const db = authedDb('legacyAdmin', 'admin');
+
+    // Ne peut PAS approuver un pro…
+    await assertFails(
+      setDoc(doc(db, 'professionals', 'pLegacy'), { status: 'approved' }, { merge: true })
+    );
+    // …ni lire le profil privé d'un autre utilisateur…
+    await assertFails(getDoc(doc(db, 'users', 'victimLegacy')));
+    // …ni créer une catégorie.
+    await assertFails(setDoc(doc(db, 'categories', 'catLegacy'), { name: 'Test' }));
+  });
 });

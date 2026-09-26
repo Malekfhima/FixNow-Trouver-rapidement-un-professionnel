@@ -24,6 +24,9 @@ class SearchState {
   final double minRating;
   final SearchSort sort;
 
+  /// True when only pros with a non-empty availability are shown.
+  final bool availableOnly;
+
   const SearchState({
     this.results = const [],
     this.isLoading = false,
@@ -35,6 +38,7 @@ class SearchState {
     this.maxPrice,
     this.minRating = 0,
     this.sort = SearchSort.rating,
+    this.availableOnly = false,
   });
 
   SearchState copyWith({
@@ -49,6 +53,7 @@ class SearchState {
     bool clearMaxPrice = false,
     double? minRating,
     SearchSort? sort,
+    bool? availableOnly,
   }) {
     return SearchState(
       results: results ?? this.results,
@@ -61,6 +66,7 @@ class SearchState {
       maxPrice: clearMaxPrice ? null : (maxPrice ?? this.maxPrice),
       minRating: minRating ?? this.minRating,
       sort: sort ?? this.sort,
+      availableOnly: availableOnly ?? this.availableOnly,
     );
   }
 }
@@ -156,6 +162,9 @@ class SearchController extends StateNotifier<SearchState> {
         .where((p) => p.ratingAvg >= state.minRating)
         .where(
             (p) => state.maxPrice == null || p.hourlyRate <= state.maxPrice!)
+        // Filtre « disponible » : le pro a déclaré au moins un jour
+        // d'ouverture (availability['days'] non vide).
+        .where((p) => !state.availableOnly || _hasAvailability(p))
         .toList();
 
     final location = _userLocation;
@@ -177,13 +186,26 @@ class SearchController extends StateNotifier<SearchState> {
     return filtered;
   }
 
+  /// True when the pro declared at least one opening day.
+  /// `availability` est un map {'days': [..]} (voir pro_profile_edit_screen).
+  static bool _hasAvailability(Professional pro) {
+    final days = pro.availability?['days'];
+    return days is List && days.isNotEmpty;
+  }
+
   /// Applies filters/sort without refetching (client-side, instant).
-  void applyFilters({double? maxPrice, double? minRating, SearchSort? sort}) {
+  void applyFilters({
+    double? maxPrice,
+    double? minRating,
+    SearchSort? sort,
+    bool? availableOnly,
+  }) {
     state = state.copyWith(
       maxPrice: maxPrice,
       clearMaxPrice: maxPrice == null,
       minRating: minRating ?? state.minRating,
       sort: sort ?? state.sort,
+      availableOnly: availableOnly ?? state.availableOnly,
     );
     // Re-run search but keep the last query/category/location.
     search(

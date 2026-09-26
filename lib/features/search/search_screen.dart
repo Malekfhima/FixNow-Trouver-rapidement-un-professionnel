@@ -184,6 +184,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                       .read(searchControllerProvider.notifier)
                       .applyFilters(maxPrice: v),
                 ),
+                const SizedBox(width: AppSpacing.md),
+                // Filtre « Disponible » : pros ayant déclaré des jours
+                // d'ouverture (availability['days']).
+                FilterChip(
+                  selected: searchState.availableOnly,
+                  onSelected: (selected) => ref
+                      .read(searchControllerProvider.notifier)
+                      .applyFilters(availableOnly: selected),
+                  label: const Text('Disponible'),
+                  avatar: Icon(
+                    Icons.event_available_rounded,
+                    size: 18,
+                    color: searchState.availableOnly
+                        ? Theme.of(context).colorScheme.onPrimary
+                        : AppColors.primary,
+                  ),
+                  showCheckmark: false,
+                  tooltip: 'Afficher uniquement les pros disponibles cette semaine',
+                ),
               ],
             ),
           ),
@@ -289,6 +308,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
               maxPrice: null,
               minRating: 0,
               sort: SearchSort.rating,
+              availableOnly: false,
             );
       },
     );

@@ -9,6 +9,7 @@ import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/firebase_options.dart';
 import 'package:fixnow/routing/app_router.dart';
 import 'package:fixnow/core/widgets/app_bindings.dart';
+import 'package:fixnow/services/notification_service.dart';
 import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/theme/theme_mode_controller.dart';
 
@@ -61,9 +62,15 @@ void main() async {
     }
   }
 
+  final container = ProviderContainer();
+  // Permet au NotificationService de naviguer hors du widget tree
+  // (tap sur une notification push) via le GoRouter global.
+  bindNotificationRouter(container);
+
   runApp(
-    const ProviderScope(
-      child: FixNowApp(),
+    UncontrolledProviderScope(
+      container: container,
+      child: const FixNowApp(),
     ),
   );
 }

@@ -4,6 +4,7 @@
   "description": "FixNow - Marketplace locale de services a domicile (regles Firestore + outillage)",
   "scripts": {
     "test:rules": "firebase emulators:exec --only firestore \"jest --runInBand\"",
+    "test:storage-rules": "firebase emulators:exec --only firestore,storage \"jest --runInBand storage.rules.test.js\"",
     "tool:claims": "node tool/set_custom_claims.js",
     "tool:public-profiles": "node tool/backfill_public_profiles.js"
   },

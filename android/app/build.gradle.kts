@@ -1,9 +1,20 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
 }
 
+
+// Signature release : lue depuis android/key.properties (NON commité).
+// Voir README.md « Signature release » et docs/FIREBASE_SETUP.md §1.2 pour
+// la génération du keystore. Sans ce fichier, le build release retombe sur
+// la clé debug (ne jamais publier un build signé debug).
+val keystoreProperties = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
 
 android {
     namespace = "com.fixnow.app"
@@ -26,11 +37,29 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            val alias = keystoreProperties.getProperty("keyAlias")
+            val keyPass = keystoreProperties.getProperty("keyPassword")
+            val storePath = keystoreProperties.getProperty("storeFile")
+            val storePass = keystoreProperties.getProperty("storePassword")
+            if (alias != null && keyPass != null && storePath != null && storePass != null) {
+                keyAlias = alias
+                keyPassword = keyPass
+                storeFile = file(storePath)
+                storePassword = storePass
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Signe avec key.properties si présent, sinon repli debug (dev).
+            signingConfig = if (keystoreProperties.getProperty("storeFile") != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

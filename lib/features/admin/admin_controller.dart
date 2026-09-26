@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fixnow/core/services/error_mapper.dart';
@@ -198,3 +200,145 @@ final adminControllerProvider =
     StateNotifierProvider<AdminController, AdminState>((ref) {
   return AdminController(ref);
 });
+
+/// Agrégats affichés dans l'onglet « Statistiques » du dashboard admin.
+class PlatformStats {
+  final int clients;
+  final int pros;
+  final int pendingPros;
+  final int requestsTotal;
+  final Map<String, int> requests;
+
+  /// Note moyenne globale, pondérée par le nombre d'avis de chaque pro.
+  final double avgRating;
+
+  const PlatformStats({
+    required this.clients,
+    required this.pros,
+    required this.pendingPros,
+    required this.requestsTotal,
+    required this.requests,
+    required this.avgRating,
+  });
+}
+
+/// Streams the platform aggregates for the admin « Statistiques » tab:
+/// clients / pros / pros en attente, demandes par statut et note moyenne.
+final platformStatsProvider = StreamProvider.autoDispose<PlatformStats>((ref) {
+  final db = FirebaseFirestore.instance;
+
+  final usersSnap = db.collection('users').snapshots();
+  final prosSnap = db.collection('professionals').snapshots();
+  final requestsSnap = db.collection('serviceRequests').snapshots();
+
+  return combineLatest3<QuerySnapshot<Map<String, dynamic>>,
+          QuerySnapshot<Map<String, dynamic>>,
+          QuerySnapshot<Map<String, dynamic>>, PlatformStats>(
+    usersSnap,
+    prosSnap,
+    requestsSnap,
+    _computeStats,
+  );
+});
+
+/// Computes [PlatformStats] from the three raw Firestore snapshots.
+PlatformStats _computeStats(
+  QuerySnapshot<Map<String, dynamic>> users,
+  QuerySnapshot<Map<String, dynamic>> pros,
+  QuerySnapshot<Map<String, dynamic>> requests,
+) {
+  var clients = 0;
+  var proCount = 0;
+  for (final u in users.docs) {
+    final role = u.data()['role'];
+    if (role == 'pro') {
+      proCount++;
+    } else if (role == 'client') {
+      clients++;
+    }
+  }
+
+  var pendingPros = 0;
+  double ratingSum = 0;
+  int ratedCount = 0;
+  for (final p in pros.docs) {
+    if (p.data()['status'] == 'pending') pendingPros++;
+    final avg = (p.data()['ratingAvg'] as num?)?.toDouble() ?? 0;
+    final count = (p.data()['ratingCount'] as num?)?.toInt() ?? 0;
+    if (count > 0) {
+      // Moyenne globale pondérée par le nombre d'avis de chaque pro.
+      ratingSum += avg * count;
+      ratedCount += count;
+    }
+  }
+
+  const statuses = [
+    'pending', 'accepted', 'quoted',
+    'inProgress', 'completed', 'cancelled',
+  ];
+  final byStatus = <String, int>{
+    for (final s in statuses) s: 0,
+  };
+  for (final r in requests.docs) {
+    final s = r.data()['status'] as String?;
+    if (s != null && byStatus.containsKey(s)) byStatus[s] = byStatus[s]! + 1;
+  }
+
+  return PlatformStats(
+    clients: clients,
+    pros: proCount,
+    pendingPros: pendingPros,
+    requestsTotal: requests.docs.length,
+    requests: byStatus,
+    avgRating: ratedCount == 0 ? 0 : ratingSum / ratedCount,
+  );
+}
+
+/// Minimal combineLatest for 3 streams (avoids an rxdart dependency):
+/// re-emits whenever ANY source stream emits, once all have emitted once.
+Stream<R> combineLatest3<A, B, C, R>(
+  Stream<A> streamA,
+  Stream<B> streamB,
+  Stream<C> streamC,
+  R Function(A, B, C) combine,
+) {
+  late StreamController<R> controller;
+  A? a;
+  B? b;
+  C? c;
+  var hasA = false, hasB = false, hasC = false;
+
+  void emit() {
+    if (hasA && hasB && hasC) {
+      controller.add(combine(a as A, b as B, c as C));
+    }
+  }
+
+  controller = StreamController<R>(
+    onListen: () {
+      final subs = <StreamSubscription<dynamic>>[
+        streamA.listen((v) {
+          a = v;
+          hasA = true;
+          emit();
+        }, onError: controller.addError),
+        streamB.listen((v) {
+          b = v;
+          hasB = true;
+          emit();
+        }, onError: controller.addError),
+        streamC.listen((v) {
+          c = v;
+          hasC = true;
+          emit();
+        }, onError: controller.addError),
+      ];
+      controller.onCancel = () async {
+        for (final s in subs) {
+          await s.cancel();
+        }
+      };
+    },
+  );
+  return controller.stream;
+}

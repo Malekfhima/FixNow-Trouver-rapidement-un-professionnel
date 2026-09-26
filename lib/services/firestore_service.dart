@@ -216,6 +216,14 @@ class FirestoreService {
     return ServiceRequest.fromFirestore(doc);
   }
 
+  /// Live stream of a single service request (null when missing).
+  /// Used by the order detail screen opened from a push notification.
+  Stream<ServiceRequest?> requestStream(String requestId) {
+    return _db.collection('serviceRequests').doc(requestId).snapshots().map(
+        (doc) =>
+            doc.exists ? ServiceRequest.fromFirestore(doc) : null);
+  }
+
   Stream<List<ServiceRequest>> clientRequestsStream(String clientId) {
     return _db
         .collection('serviceRequests')

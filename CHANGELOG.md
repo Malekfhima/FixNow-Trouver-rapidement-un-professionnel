@@ -102,6 +102,27 @@ Chaque ligne renvoie au fichier modifié.
 
 ---
 
+## PARTIE 5 — Fonctions manquantes complétées (9 tâches)
+
+| # | Tâche | Correctif | Fichier(s) |
+|---|---|---|---|
+| 1 | **Navigation au tap sur notification push** | `getInitialMessage()` + `onMessageOpenedApp` → route `/orders/{requestId}` (`newRequest`) ou `/chat/{chatId}` (`newMessage`) via GoRouter global (`bindNotificationRouter` dans `main.dart`) ; si l'utilisateur n'est pas connecté au tap, destination gardée en `pendingNavigation` et re-jouée après login ; nouvelle route `/orders/:requestId` + écran `OrdersDetailScreen` (devis, accepter/annuler selon la machine à états) | `lib/services/notification_service.dart`, `lib/core/widgets/app_bindings.dart`, `lib/main.dart`, `lib/routing/app_router.dart`, `lib/features/client_dashboard/order_detail_screen.dart` (nouveau), `lib/services/firestore_service.dart` (`requestStream`) |
+| 2 | **Canal Android `fixnow_default`** | Dépendance `flutter_local_notifications` ; canal haute importance créé au démarrage ; `FirebaseMessaging.onMessage` affiché localement en foreground (FCM ne l'affiche pas) ; tap sur notif locale → même routage ; icône `@mipmap/ic_launcher` | `pubspec.yaml`, `lib/services/local_notification_service.dart` (nouveau), `lib/core/widgets/app_bindings.dart` |
+| 3 | **Filtre « disponible »** | `availableOnly` dans `SearchState` ; filtre client `availability['days']` non vide (structure vérifiée : `pro_profile_edit_screen.dart`) appliqué dans `_filterAndSort` à côté de minRating/maxPrice ; `FilterChip` « Disponible » dans la barre de filtres + réinitialisé avec les autres | `lib/features/search/search_controller.dart`, `lib/features/search/search_screen.dart` |
+| 4 | **Onglet Statistiques admin** | 5ᵉ onglet du `TabController` ; `platformStatsProvider` (3 snapshots combinés par un `combineLatest3` local — pas de rxdart) : clients, pros, pros en attente, demandes par statut (6), note moyenne pondérée ; cartes `Card`+`Text` (pas de lib de graphes) | `lib/features/admin/admin_screen.dart`, `lib/features/admin/admin_controller.dart` |
+| 5 | **Tests règles Storage** | `storage.rules.test.js` : avatars (upload propre dossier, refus dossier d'autrui, refus anonyme, non-image/>5 Mo refusés, delete propriétaire), galerie pro, photos de demande (participant vs tiers, demande inexistante), images de chat ; script `npm run test:storage-rules` (émulateurs firestore+storage) ; émulateur storage ajouté à `firebase.json` | `storage.rules.test.js` (nouveau), `package.json`, `firebase.json` |
+| 6 | **App Check** | Code déjà complet dans `main.dart` (Play Integrity/DeviceCheck release, debug en dev, jeton `--dart-define`) — complété par la doc : récupération du jeton, enregistrement console, activation enforcement progressif sans casser l'app | `lib/main.dart` (vérifié), `docs/APP_CHECK_SETUP.md` (nouveau) |
+| 7 | **Migration custom claims admin** | Fallback legacy `role() == 'admin'` retiré de `isAdmin()` (validé par l'utilisateur : script `tool:claims` exécuté partout) ; test ajouté : un `role: 'admin'` Firestore sans custom claim n'a plus aucun droit (pro, users, categories refusés) | `firestore.rules`, `firestore.rules.test.js` |
+| 8 | **Keystore release** | `build.gradle.kts` lit `android/key.properties` (keyAlias/keyPassword/storeFile/storePassword) → `signingConfigs.release`, repli debug si absent ; doc README « Signature release » (génération keystore vers `docs/FIREBASE_SETUP.md` §1.2) ; `key.properties`/`*.jks` déjà ignorés par git | `android/app/build.gradle.kts`, `README.md` |
+| 9 | **Vérification Functions** | `node --check` OK, 2 triggers exportés (`onServiceRequestCreated`, `onChatMessageCreated`), dépendances v2 présentes (`firebase-functions ^7`, `firebase-admin ^13`, node 24) — prêt pour `firebase deploy --only functions` (région par défaut us-central1) | `functions/index.js` (lecture seule) |
+
+**Vérifications Partie 5 :** `flutter analyze` → **0 problème** ; `flutter test` → **33/33**.
+`npm run test:rules` / `test:storage-rules` non exécutés sur cette machine
+(Java absent pour l'émulateur Firebase) — à lancer où Java est disponible
+avant déploiement des règles.
+
+---
+
 ## SYNTHÈSE FINALE — Reste à faire / Décisions attendues
 
 | # | Sujet | Type | Détail |

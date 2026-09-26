@@ -19,6 +19,7 @@ import 'package:fixnow/features/booking/booking_screen.dart';
 import 'package:fixnow/features/chat/chat_list_screen.dart';
 import 'package:fixnow/features/chat/chat_detail_screen.dart';
 import 'package:fixnow/features/client_dashboard/orders_screen.dart';
+import 'package:fixnow/features/client_dashboard/order_detail_screen.dart';
 import 'package:fixnow/features/profile/profile_screen.dart';
 import 'package:fixnow/features/profile/profile_edit_screen.dart';
 import 'package:fixnow/features/review/review_screen.dart';
@@ -44,6 +45,7 @@ class RoutePaths {
   static const chatList = '/chat';
   static const chatDetail = '/chat/:chatId';
   static const orders = '/orders';
+  static const orderDetail = '/orders/:requestId';
   static const profile = '/profile';
   static const newChat = '/chat/new';
   static const bookingNew = '/booking/new';
@@ -182,6 +184,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final chatId = state.pathParameters['chatId']!;
           return ChatDetailScreen(chatId: chatId);
+        },
+      ),
+
+      // Détail d'une demande (depuis une notification push newRequest).
+      GoRoute(
+        path: RoutePaths.orderDetail,
+        builder: (context, state) {
+          final requestId = state.pathParameters['requestId']!;
+          return OrdersDetailScreen(requestId: requestId);
         },
       ),
 

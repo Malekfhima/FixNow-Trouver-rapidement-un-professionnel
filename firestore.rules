@@ -25,19 +25,13 @@ service cloud.firestore {
       return isAuth() && (role() == 'pro' || caller().get('isPro', false) == true);
     }
 
-    // ── Rôles : migration vers les custom claims ──────────────────────
-    // CIBLE : isAdmin() = isAuth() && request.auth.token.get('admin', false) == true
-    //         → plus aucune lecture de users/ à chaque évaluation de règle.
-    // EN COURS : le rôle legacy (users/{uid}.role == 'admin') reste accepté
-    //            pour ne casser aucun compte existant.
-    // PROCÉDURE : voir tool/set_custom_claims.js et CHANGELOG.md.
-    // 1) node tool/set_custom_claims.js <uid...>  (pose le claim admin)
-    // 2) une fois TOUS les admins migrés, remplacer le corps de isAdmin()
-    //    par la forme « cible » ci-dessus et redéployer.
+    // ── Rôles : custom claims uniquement ─────────────────────────────
+    // MIGRATION TERMINÉE : tous les comptes admin portent le custom claim
+    // `admin: true` (posé par tool/set_custom_claims.js). Le rôle legacy
+    // lu dans users/{uid}.role n'est PLUS accepté pour l'autorisation —
+    // un document `role: 'admin'` sans custom claim n'a aucun droit admin.
     function isAdmin() {
-      return isAuth() && (
-        request.auth.token.get('admin', false) == true || role() == 'admin'
-      );
+      return isAuth() && request.auth.token.get('admin', false) == true;
     }
 
     function isOwner(userId) {

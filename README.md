@@ -85,6 +85,35 @@ L'application démarre même **sans Firebase configuré** (mode dégradé local,
 voir `main.dart` et `lib/core/config/app_runtime.dart`) — utile pour travailler
 sur l'UI sans backend ; les redirections d'auth sont alors désactivées.
 
+### 🔑 Signature release (Android)
+
+Le build release est signé via `android/key.properties` (non commité, déjà
+dans `.gitignore`) : sans ce fichier, le build retombe sur la clé debug
+(usage dev uniquement — ne JAMAIS publier un build signé debug).
+
+1. Générer le keystore (une seule fois) — voir aussi
+   [`docs/FIREBASE_SETUP.md`](docs/FIREBASE_SETUP.md) §1.2 :
+   ```bash
+   keytool -genkey -v \
+     -keystore fixnow-release.jks \
+     -keyalg RSA -keysize 2048 -validity 10000 \
+     -alias fixnow
+   ```
+   ⚠️ Conserver le keystore et ses mots de passe HORS du dépôt (sauvegarde
+   sécurisée) : perdre le keystore = impossible de mettre à jour l'app sur
+   le Play Store.
+2. Créer `android/key.properties` :
+   ```properties
+   storePassword=<mot de passe du keystore>
+   keyPassword=<mot de passe de la clé>
+   keyAlias=fixnow
+   storeFile=../fixnow-release.jks   # chemin relatif à android/app/
+   ```
+3. `flutter build apk --release` — signé automatiquement.
+4. Déclarer l'empreinte SHA-1/SHA-256 du keystore release dans la console
+   Firebase (Google Sign-In), puis re-télécharger `google-services.json`
+   — procédure dans [`docs/FIREBASE_SETUP.md`](docs/FIREBASE_SETUP.md) §1.3.
+
 ---
 
 ## 👥 Flux utilisateurs

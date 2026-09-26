@@ -18,7 +18,7 @@ class AdminScreen extends ConsumerStatefulWidget {
 
 class _AdminScreenState extends ConsumerState<AdminScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 4, vsync: this);
+  late final TabController _tabs = TabController(length: 5, vsync: this);
 
   @override
   void dispose() {
@@ -48,6 +48,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
             Tab(text: 'Pros'),
             Tab(text: 'Catégories'),
             Tab(text: 'Signalements'),
+            Tab(text: 'Statistiques'),
           ],
         ),
       ),
@@ -67,14 +68,14 @@ class _AdminScreenState extends ConsumerState<AdminScreen>
                       style: AppTextStyles.bodyMedium,
                     ),
                   ),
-                )
-              : TabBarView(
+                )                : TabBarView(
                   controller: _tabs,
                   children: [
                     _ValidationTab(state: state),
                     _ProsTab(state: state),
                     _CategoriesTab(state: state),
                     const _ReportsTab(),
+                    const _StatsTab(),
                   ],
                 ),
       floatingActionButton: stats == null
@@ -433,6 +434,163 @@ class _ReportsTab extends ConsumerWidget {
 final _openReportsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
   return ref.watch(adminControllerProvider.notifier).openReportsStream();
 });
+
+// ── Stats tab ─────────────────────────────────────────────────────────
+
+/// Onglet « Statistiques » : compteurs simples en cartes (pas de librairie
+/// de graphiques — Card + Text comme demandé).
+class _StatsTab extends ConsumerWidget {
+  const _StatsTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statsAsync = ref.watch(platformStatsProvider);
+
+    return statsAsync.when(
+      loading: () => const RequestCardSkeletonList(
+        padding: EdgeInsets.all(AppSpacing.lg),
+        spacing: AppSpacing.md,
+      ),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Text(
+            'Statistiques indisponibles :\n${ErrorMapper.message(e)}',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMedium,
+          ),
+        ),
+      ),
+      data: (stats) {
+        const statusLabels = <String, String>{
+          'pending': 'En attente',
+          'accepted': 'Acceptées',
+          'quoted': 'Devis envoyé',
+          'inProgress': 'En cours',
+          'completed': 'Terminées',
+          'cancelled': 'Annulées',
+        };
+        return ListView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _StatCard(
+                    icon: Icons.people_alt_rounded,
+                    label: 'Clients',
+                    value: '${stats.clients}',
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: _StatCard(
+                    icon: Icons.engineering_rounded,
+                    label: 'Pros',
+                    value: '${stats.pros}',
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: _StatCard(
+                    icon: Icons.hourglass_top_rounded,
+                    label: 'Pros en attente',
+                    value: '${stats.pendingPros}',
+                    color: AppColors.warning,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: _StatCard(
+                    icon: Icons.star_rounded,
+                    label: 'Note moyenne',
+                    value: stats.avgRating.toStringAsFixed(1),
+                    color: AppColors.accent,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text('Demandes par statut',
+                style: AppTextStyles.h4.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: AppSpacing.md),
+            ...statusLabels.entries.map(
+              (e) => _StatCard(
+                icon: Icons.receipt_long_rounded,
+                label: e.value,
+                value: '${stats.requests[e.key] ?? 0}',
+                color: AppColors.primary,
+                trailing: stats.requestsTotal == 0
+                    ? null
+                    : '${(stats.requests[e.key] ?? 0) * 100 ~/ stats.requestsTotal} %',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final String? trailing;
+
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: AppRadius.lgAll,
+        border:
+            Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        boxShadow: AppShadows.sm,
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: AppRadius.mdAll,
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ),
+          Text(value,
+              style: AppTextStyles.h4.copyWith(fontWeight: FontWeight.w700)),
+          if (trailing != null) ...[
+            const SizedBox(width: AppSpacing.sm),
+            Text(trailing!, style: AppTextStyles.caption),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 // ── Shared pro card ─────────────────────────────────────────────────────
 
