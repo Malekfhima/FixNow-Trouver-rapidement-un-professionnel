@@ -62,24 +62,38 @@ const proOnlyRoutes = ['/pro-dashboard', '/pro-profile-edit'];
 const adminOnlyRoutes = ['/admin'];
 
 /// App router provider — uses GoRouter with role-based auth redirect.
+///
+/// Le GoRouter est créé **une seule fois** pour la vie de l'app : les
+/// changements d'auth/profile ré-évaluent le redirect via
+/// `refreshListenable`. (Reconstruire le GoRouter à chaque émission d'auth
+/// monterait un 2e Navigator avec la même GlobalKey → crash
+/// « A GlobalKey was used multiple times » / HeroControllerScope.)
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
-  final profileAsync = ref.watch(userProfileProvider);
-
-  // Resolve the signed-in user's capabilities (null when logged out).
-  final user = profileAsync.valueOrNull;
-  final UserRole? role = user?.role;
-  final bool isPro = user?.isPro ?? false;
-  final isLoggedIn = authState.valueOrNull != null;
-
-  // While the Firestore profile is loading for a signed-in user, render the
-  // current route without redirecting (avoids flicker to /login).
-  final profileLoading = isLoggedIn && profileAsync.isLoading;
+  final refresh = ValueNotifier<int>(0);
+  ref.onDispose(refresh.dispose);
+  ref.listen(authStateProvider, (_, __) => refresh.value++);
+  ref.listen(userProfileProvider, (_, __) => refresh.value++);
 
   return GoRouter(
     initialLocation: RoutePaths.home,
     debugLogDiagnostics: true,
+    refreshListenable: refresh,
     redirect: (context, state) {
+      // Lecture non-réactive ici : le redirect est ré-évalué par
+      // refreshListenable à chaque changement d'auth/profile.
+      final authState = ref.read(authStateProvider);
+      final profileAsync = ref.read(userProfileProvider);
+
+      // Resolve the signed-in user's capabilities (null when logged out).
+      final user = profileAsync.valueOrNull;
+      final UserRole? role = user?.role;
+      final bool isPro = user?.isPro ?? false;
+      final isLoggedIn = authState.valueOrNull != null;
+
+      // While the Firestore profile is loading for a signed-in user, render the
+      // current route without redirecting (avoids flicker to /login).
+      final profileLoading = isLoggedIn && profileAsync.isLoading;
+
       final location = state.matchedLocation;
       final isOnboarding = location == RoutePaths.onboarding;
       final isAuthRoute =
