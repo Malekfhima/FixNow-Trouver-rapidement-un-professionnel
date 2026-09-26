@@ -32,6 +32,27 @@ class NotificationService {
   /// Replayed by [AppBindings] once authentication resolves.
   ({String location, DateTime at})? pendingNavigation;
 
+  /// Dernière destination poussée (anti-doublon).
+  String? _lastPushedLocation;
+  DateTime _lastPushedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// True when [location] was already pushed within the last 2 seconds.
+  ///
+  /// FCM peut délivrer le MÊME tap deux fois au démarrage à froid
+  /// (`getInitialMessage` + `onMessageOpenedApp`) ; deux push identiques
+  /// créent deux pages avec la même clé → crash Navigator
+  /// (`!keyReservation.contains(key)`).
+  bool _isDuplicatePush(String location) {
+    final now = DateTime.now();
+    final duplicate = location == _lastPushedLocation &&
+        now.difference(_lastPushedAt) < const Duration(seconds: 2);
+    if (!duplicate) {
+      _lastPushedLocation = location;
+      _lastPushedAt = now;
+    }
+    return duplicate;
+  }
+
   /// Routes the user according to a notification payload.
   ///
   /// Cloud Functions send `data.type` = `newRequest` (with `requestId`) or
@@ -53,15 +74,26 @@ class NotificationService {
       }
     }
     if (location == null) return;
+    // Rejette la seconde livraison du même tap (FCM) ou un push vers la
+    // page déjà affichée.
+    if (_isDuplicatePush(location)) return;
 
     try {
       final loggedIn =
           _routerContainer?.read(authStateProvider).valueOrNull != null;
-      if (loggedIn) {
-        _routerContainer?.read(appRouterProvider).push(location);
-      } else {
+      if (!loggedIn) {
         pendingNavigation = (location: location, at: DateTime.now());
+        return;
       }
+      final router = _routerContainer?.read(appRouterProvider);
+      final stack = router?.routerDelegate.currentConfiguration;
+      if (stack != null &&
+          stack.isNotEmpty &&
+          stack.last.matchedLocation == location) {
+        // Déjà sur l'écran cible : ne rien pousser (sinon doublon de clé).
+        return;
+      }
+      router?.push(location);
     } catch (_) {
       // Router not ready yet — keep the destination for after login.
       pendingNavigation = (location: location, at: DateTime.now());

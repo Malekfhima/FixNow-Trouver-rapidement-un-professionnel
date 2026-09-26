@@ -70,7 +70,15 @@ class _AppBindingsState extends ConsumerState<AppBindings> {
     if (pending == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
-        ref.read(appRouterProvider).push(pending.location);
+        final router = ref.read(appRouterProvider);
+        final stack = router.routerDelegate.currentConfiguration;
+        // Déjà sur l'écran cible : ne pas pousser (sinon doublon de clé
+        // → assertion Navigator `!keyReservation.contains(key)`).
+        if (stack.isNotEmpty &&
+            stack.last.matchedLocation == pending.location) {
+          return;
+        }
+        router.push(pending.location);
       } catch (_) {}
     });
   }
