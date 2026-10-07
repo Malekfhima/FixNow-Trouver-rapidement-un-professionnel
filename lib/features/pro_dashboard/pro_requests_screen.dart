@@ -7,6 +7,7 @@ import 'package:fixnow/models/service_request_state_machine.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/widgets/outline_button.dart';
 import 'package:fixnow/core/widgets/skeleton.dart';
+import 'package:fixnow/core/widgets/request_photo_gallery.dart';
 import 'package:fixnow/features/pro_dashboard/pro_requests_controller.dart';
 import 'package:fixnow/models/service_request_model.dart';
 import 'package:intl/intl.dart';
@@ -425,6 +426,10 @@ class _RequestHeader extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
+        if (request.photos.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          RequestPhotoGallery(photoUrls: request.photos),
+        ],
         const SizedBox(height: AppSpacing.sm),
         Row(
           children: [

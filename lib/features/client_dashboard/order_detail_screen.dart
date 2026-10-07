@@ -6,6 +6,7 @@ import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/core/services/error_mapper.dart';
 import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/app_avatar.dart';
+import 'package:fixnow/core/widgets/request_photo_gallery.dart';
 import 'package:fixnow/core/widgets/skeleton.dart';
 import 'package:fixnow/models/service_request_model.dart';
 import 'package:fixnow/models/user_model.dart';
@@ -98,6 +99,9 @@ class _OrdersDetailScreenState extends ConsumerState<OrdersDetailScreen> {
             acting: _acting,
             onAcceptQuote: () => _transition(request, ServiceRequestStatus.accepted),
             onDecline: () => _transition(request, ServiceRequestStatus.cancelled),
+            onEdit: request.status == ServiceRequestStatus.pending
+                ? () => _editRequest(request)
+                : null,
           );
         },
       ),
@@ -118,6 +122,104 @@ class _OrdersDetailScreenState extends ConsumerState<OrdersDetailScreen> {
       AppAlerts.success(
           context, target == ServiceRequestStatus.accepted ? 'Devis accepté' : 'Demande annulée');
       context.go('/orders');
+    } catch (e) {
+      if (!mounted) return;
+      AppAlerts.error(context, ErrorMapper.message(e));
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  /// Modifie une demande EN ATTENTE (description, adresse, date) —
+  /// mise à jour autorisée par les règles Firestore (statut inchangé).
+  Future<void> _editRequest(ServiceRequest request) async {
+    final descriptionController =
+        TextEditingController(text: request.description);
+    final addressController = TextEditingController(text: request.address);
+    DateTime? scheduledDate = request.scheduledDate;
+    final formKey = GlobalKey<FormState>();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Modifier la demande'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: descriptionController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'Description'),
+                  validator: (v) => (v == null || v.trim().length < 10)
+                      ? '10 caractères minimum'
+                      : null,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextFormField(
+                  controller: addressController,
+                  decoration: const InputDecoration(labelText: 'Adresse'),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Adresse requise' : null,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: dialogContext,
+                      initialDate: scheduledDate ??
+                          DateTime.now().add(const Duration(days: 1)),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) {
+                      setDialogState(() => scheduledDate = picked);
+                    }
+                  },
+                  icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                  label: Text(scheduledDate == null
+                      ? 'Date (optionnelle)'
+                      : 'Le ${scheduledDate!.day}/${scheduledDate!.month}/${scheduledDate!.year}'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.pop(dialogContext, true);
+                }
+              },
+              child: const Text('Enregistrer'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (saved != true || !mounted) return;
+
+    setState(() => _acting = true);
+    try {
+      // Uniquement les champs autorisés au client par les règles
+      // (description, address, scheduledDate) — statut inchangé.
+      await ref.read(firestoreServiceProvider).updateServiceRequest(
+        request.id,
+        {
+          'description': descriptionController.text.trim(),
+          'address': addressController.text.trim(),
+          'scheduledDate': scheduledDate,
+        },
+      );
+      if (!mounted) return;
+      AppAlerts.success(context, 'Demande modifiée');
     } catch (e) {
       if (!mounted) return;
       AppAlerts.error(context, ErrorMapper.message(e));
@@ -147,6 +249,7 @@ class _RequestDetail extends StatelessWidget {
   final bool acting;
   final VoidCallback onAcceptQuote;
   final VoidCallback onDecline;
+  final VoidCallback? onEdit;
 
   const _RequestDetail({
     required this.request,
@@ -154,6 +257,7 @@ class _RequestDetail extends StatelessWidget {
     required this.acting,
     required this.onAcceptQuote,
     required this.onDecline,
+    this.onEdit,
   });
 
   @override
@@ -213,6 +317,10 @@ class _RequestDetail extends StatelessWidget {
                   style: AppTextStyles.bodyMedium,
                   maxLines: 6,
                   overflow: TextOverflow.ellipsis),
+              if (request.photos.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                RequestPhotoGallery(photoUrls: request.photos),
+              ],
               if (request.scheduledDate != null) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Text(
@@ -265,6 +373,16 @@ class _RequestDetail extends StatelessWidget {
                   child: const Text('Annuler'),
                 ),
               ),
+              if (request.status == ServiceRequestStatus.pending &&
+                  onEdit != null) ...[
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: acting ? null : onEdit,
+                    child: const Text('Modifier'),
+                  ),
+                ),
+              ],
               if (request.status == ServiceRequestStatus.quoted) ...[
                 const SizedBox(width: AppSpacing.md),
                 Expanded(

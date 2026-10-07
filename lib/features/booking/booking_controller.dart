@@ -161,6 +161,22 @@ class BookingController extends StateNotifier<BookingState> {
       await _firestoreService.updateServiceRequest(request.id, {
         'status': ServiceRequestStatus.cancelled.name,
       });
+
+      // Notify the pro (best-effort).
+      try {
+        if (request.proId != null && request.proId!.isNotEmpty) {
+          await pushNotification(
+            _ref,
+            userId: request.proId!,
+            type: NotificationType.requestCancelled,
+            relatedId: request.id,
+            title: 'Demande annulée',
+            body: 'Le client a annulé la demande.',
+          );
+        }
+      } catch (_) {
+        debugPrint('notification (cancelled) failed');
+      }
       return null;
     } catch (e) {
       return ErrorMapper.message(e);

@@ -176,7 +176,12 @@ class ProRequestsController extends StateNotifier<ProRequestsState> {
         .canTransitionTo(ServiceRequestStatus.inProgress, ActorRole.pro)) {
       return 'Action non autorisée pour cette demande';
     }
-    return _update(request.id, {'status': ServiceRequestStatus.inProgress.name});
+    return _updateAndNotify(
+      request.id,
+      {'status': ServiceRequestStatus.inProgress.name},
+      NotificationType.requestStarted,
+      body: 'Le professionnel a commencé l\'intervention.',
+    );
   }
 
   /// Marks a request as completed (state machine: inProgress -> completed).
@@ -196,8 +201,9 @@ class ProRequestsController extends StateNotifier<ProRequestsState> {
   Future<String?> _updateAndNotify(
     String requestId,
     Map<String, dynamic> data,
-    NotificationType type,
-  ) async {
+    NotificationType type, {
+    String? body,
+  }) async {
     final error = await _update(requestId, data);
     if (error != null) return error;
 
@@ -212,11 +218,12 @@ class ProRequestsController extends StateNotifier<ProRequestsState> {
           type: type,
           relatedId: requestId,
           title: NotificationCopy.titleFor(type),
-          body: NotificationCopy.bodyForRequest(
-            ServiceRequestStatus.values
-                .firstWhere((s) => s.name == data['status']),
-            'Le professionnel',
-          ),
+          body: body ??
+              NotificationCopy.bodyForRequest(
+                ServiceRequestStatus.values
+                    .firstWhere((s) => s.name == data['status']),
+                'Le professionnel',
+              ),
         );
       }
     } catch (_) {

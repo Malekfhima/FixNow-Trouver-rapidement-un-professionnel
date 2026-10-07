@@ -182,20 +182,24 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                             Positioned(
                               right: 0,
                               top: 0,
-                              child: GestureDetector(
-                                onTap: () =>
-                                    setState(() => _photos.removeAt(index)),
-                                child: Container(
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.error,
-                                    shape: BoxShape.circle,
+                              child: Semantics(
+                                button: true,
+                                label: 'Supprimer la photo ${index + 1}',
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      setState(() => _photos.removeAt(index)),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.error,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(Icons.close_rounded,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onPrimary,
+                                        size: 14),
                                   ),
-                                  child: Icon(Icons.close_rounded,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onPrimary,
-                                      size: 14),
                                 ),
                               ),
                             ),

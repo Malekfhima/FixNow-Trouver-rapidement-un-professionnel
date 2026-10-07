@@ -49,6 +49,39 @@ class LocalNotificationService {
     }
   }
 
+  /// Displays an app-opened notification (new unread Firestore notification
+  /// while the app is in the foreground — no Cloud Functions involved).
+  Future<void> showAppNotification({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS) {
+      return;
+    }
+    if (title.isEmpty && body.isEmpty) return;
+
+    await _plugin.show(
+      id: (title + body).hashCode,
+      title: title.isEmpty ? channelName : title,
+      body: body,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          channelId,
+          channelName,
+          channelDescription:
+              'Notifications FixNow (messages, demandes de service)',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+      payload: payload,
+    );
+  }
+
   /// Displays a foreground FCM message using the `fixnow_default` channel.
   Future<void> showForeground(RemoteMessage message) async {
     if (defaultTargetPlatform != TargetPlatform.android &&

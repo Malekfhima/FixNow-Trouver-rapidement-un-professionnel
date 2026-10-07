@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// Kind of in-app notification.
 enum NotificationType {
   newMessage,
+  requestStarted,
+  reviewReceived,
   quoteReceived,
   requestAccepted,
   requestDeclined,

@@ -36,6 +36,10 @@ class NotificationCopy {
     switch (type) {
       case NotificationType.newMessage:
         return 'Nouveau message';
+      case NotificationType.requestStarted:
+        return 'Intervention démarrée';
+      case NotificationType.reviewReceived:
+        return 'Nouvel avis';
       case NotificationType.quoteReceived:
         return 'Devis reçu';
       case NotificationType.requestAccepted:

@@ -361,7 +361,8 @@ service cloud.firestore {
         && request.resource.data.userId is string
         && request.resource.data.actorId == request.auth.uid
         && request.resource.data.type in [
-          'newMessage', 'quoteReceived', 'requestAccepted', 'requestDeclined',
+          'newMessage', 'requestStarted', 'reviewReceived', 'quoteReceived',
+          'requestAccepted', 'requestDeclined',
           'requestCompleted', 'requestCancelled', 'proApproved', 'proRejected',
           'generic'
         ]

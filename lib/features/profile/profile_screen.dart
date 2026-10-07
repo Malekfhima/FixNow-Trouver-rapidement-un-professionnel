@@ -52,12 +52,18 @@ class ProfileScreen extends ConsumerWidget {
                 }
               },
             ),
-            if (user.valueOrNull?.isPro ?? false)
+            if (user.valueOrNull?.isPro ?? false) ...[
               _MenuItem(
                 icon: Icons.work_outline,
                 label: 'Mes demandes (pro)',
                 onTap: () => context.push('/pro-dashboard'),
-              )
+              ),
+              _MenuItem(
+                icon: Icons.rate_review_outlined,
+                label: 'Mes avis',
+                onTap: () => context.push('/pro-reviews'),
+              ),
+            ]
             else
               _MenuItem(
                 icon: Icons.add_business_outlined,

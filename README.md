@@ -63,7 +63,39 @@ La configuration Firebase est **embarquée** dans le projet (pas de `.env` serve
 - `firebase.json` — mapping des apps Firebase + émulateur Firestore (port 8081)
 
 > 🔒 Les identifiants Firebase client ne sont **pas des secrets** : la sécurité repose
-> sur les règles Firestore/Storage et l'activation d'**App Check** (recommandé en production).
+> sur les règles Firestore et l'activation d'**App Check** (recommandé en production).
+
+### 🖼️ Images : Cloudinary (pas de Firebase Storage)
+
+Firebase Storage exige désormais le plan **Blaze** (carte bancaire) : le projet
+reste 100 % gratuit sur le plan **Spark**, les images (avatars, galerie pro,
+photos de demande, images de chat) sont donc hébergées sur **Cloudinary**
+(offre gratuite, upload *unsigned* via preset).
+
+1. Créer un compte gratuit sur cloudinary.com, relever le **cloud name**.
+2. Settings → Upload → **Add upload preset** : mode **Unsigned**, restriction
+   aux images (c'est un preset public par nature : ne jamais y mettre de secret).
+3. Lancer l'app avec les deux variables (jamais en dur dans le code) :
+
+```bash
+flutter run \
+  --dart-define=CLOUDINARY_CLOUD_NAME=votre-cloud \
+  --dart-define=CLOUDINARY_UPLOAD_PRESET=votre-preset
+```
+
+Gardes client conservées : **5 Mo max**, **images uniquement** ; messages d'erreur
+en français via `ErrorMapper`. Sans ces variables, l'app démarre mais l'upload
+d'images renvoie une erreur explicite.
+
+### 📵 Auth téléphone désactivable
+
+Le quota SMS gratuit de Firebase étant très limité, la connexion par téléphone
+demeure codée mais peut être désactivée (email + Google restent le parcours
+principal) :
+
+```bash
+flutter run --dart-define=ENABLE_PHONE_AUTH=false
+```
 
 ---
 
@@ -75,6 +107,11 @@ flutter devices
 
 # Lancer sur Android / iOS / Windows / Web
 flutter run -d <device-id>
+
+# Avec la config images Cloudinary (requis pour avatars/photos)
+flutter run -d <device-id> \
+  --dart-define=CLOUDINARY_CLOUD_NAME=<cloud> \
+  --dart-define=CLOUDINARY_UPLOAD_PRESET=<preset>
 
 # Build release
 flutter build apk        # Android
@@ -262,19 +299,21 @@ Un écran de seed, accessible **uniquement en debug** (`kDebugMode`) via
 - [x] Flux professionnel : inscription pro, édition de profil, « Mes demandes » (accepter/refuser/devis/démarrer/terminer)
 - [x] Seed de démonstration (catégories + pros `[DÉMO]`, bouton debug uniquement)
 
-### P1 – Cœur métier
-- [ ] Avis : notation après prestation terminée (1 avis / prestation)
-- [ ] Notifications (in-app d'abord ; FCM push ensuite — voir note Cloud Functions)
-- [ ] Upload de photos (demandes, galerie pro)
-- [ ] Recherche avancée : tri, filtres note/prix/disponibilité, pagination
+### P1 – Cœur métier ✅
+- [x] Avis : notation après prestation terminée (batch avis + compteurs, « Mes avis » côté pro)
+- [x] Notifications in-app + locales (`flutter_local_notifications`, sans Cloud Functions)
+- [x] Upload de photos : Cloudinary (avatars, galerie pro, photos de demande, images de chat)
+- [x] Recherche avancée : tri, filtres note/prix/disponibilité, pagination
+- [x] Paiement / acompte derrière une interface `PaymentService` (implémentation simulée `FakePaymentService`, sans frais)
 
-### P2 – Administration & options
-- [ ] Tableau de bord admin (validation des pros, modération, catégories, statistiques)
-- [ ] Paiement / acompte derrière une interface `PaymentService` (stub au départ)
+### P2 – Administration & options ✅
+- [x] Tableau de bord admin (validation des pros, modération, statistiques)
+- [x] Paramètres/aide (thème clair/sombre, déconnexion, à propos, contact)
 
-> **Notifications push (FCM)** : les Cloud Functions nécessitent le plan Blaze.
-> Une alternative sans coût (notifications in-app/locales via Firestore + flux temps réel)
-> est étudiée en priorité ; l'option Cloud Functions fera l'objet d'une validation séparée.
+> **Plan Spark (100 % gratuit)** : pas de Firebase Storage (→ Cloudinary), pas de
+> Cloud Functions déployées (notifications créées côté client dans Firestore +
+> notifications locales). Le dossier `functions/` est optionnel et documenté
+> pour une migration future vers Blaze.
 
 ---
 

@@ -130,6 +130,8 @@ class _NotificationTile extends ConsumerWidget {
     }
     switch (item.type) {
       case NotificationType.quoteReceived:
+      case NotificationType.requestStarted:
+      case NotificationType.reviewReceived:
       case NotificationType.requestAccepted:
       case NotificationType.requestDeclined:
       case NotificationType.requestCompleted:
@@ -154,6 +156,10 @@ class _NotificationTile extends ConsumerWidget {
         return (Icons.chat_bubble_outline_rounded, AppColors.primary);
       case NotificationType.quoteReceived:
         return (Icons.request_quote_outlined, AppColors.accent);
+      case NotificationType.requestStarted:
+        return (Icons.construction_rounded, AppColors.accent);
+      case NotificationType.reviewReceived:
+        return (Icons.rate_review_outlined, AppColors.accent);
       case NotificationType.requestAccepted:
         return (Icons.check_circle_outline_rounded, AppColors.success);
       case NotificationType.requestDeclined:

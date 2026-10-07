@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:fixnow/core/config/app_runtime.dart' show phoneAuthEnabled;
 import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/primary_button.dart';
@@ -206,19 +207,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: AppSpacing.md),
 
-                // ── Phone button ────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: OutlinedButton.icon(
-                    onPressed: authState.isLoading
-                        ? null
-                        : () => context.push('/phone-auth'),
-                    icon: const Icon(Icons.phone_outlined, size: 20),
-                    label: const Text('Continuer avec téléphone'),
+                // ── Phone button (masqué si désactivé : quota SMS
+                //    gratuit limité — voir ENABLE_PHONE_AUTH) ────────
+                if (phoneAuthEnabled) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: OutlinedButton.icon(
+                      onPressed: authState.isLoading
+                          ? null
+                          : () => context.push('/phone-auth'),
+                      icon: const Icon(Icons.phone_outlined, size: 20),
+                      label: const Text('Continuer avec téléphone'),
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.xxxxl),
+                  const SizedBox(height: AppSpacing.xxxxl),
+                ],
 
                 // ── Sign up link ────────────────────────────────
                 Center(

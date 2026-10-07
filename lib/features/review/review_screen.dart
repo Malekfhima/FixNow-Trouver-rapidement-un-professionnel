@@ -9,6 +9,7 @@ import 'package:fixnow/core/widgets/primary_button.dart';
 import 'package:fixnow/core/utils/validators.dart';
 import 'package:fixnow/features/professional_profile/pro_profile_controller.dart';
 import 'package:fixnow/models/review_model.dart';
+import 'package:fixnow/models/notification_model.dart';
 import 'package:fixnow/services/firestore_service.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 
@@ -53,6 +54,25 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     try {
       // UN seul batch : avis + compteurs du pro (exigé par les règles).
       await ref.read(firestoreServiceProvider).createReview(review);
+
+      // Notify the pro (best-effort) — sans Cloud Functions, l'avis écrit
+      // directement une notification Firestore.
+      try {
+        await ref.read(firestoreServiceProvider).createNotification(
+          NotificationItem(
+            id: '',
+            userId: proId,
+            actorId: user.uid,
+            type: NotificationType.reviewReceived,
+            relatedId: widget.requestId,
+            title: 'Nouvel avis',
+            body: 'Un client vous a laissé un avis ($_rating/5).',
+            createdAt: DateTime.now(),
+          ),
+        );
+      } catch (_) {
+        debugPrint('notification (review) failed');
+      }
     } catch (e) {
       error = ErrorMapper.message(e);
     }

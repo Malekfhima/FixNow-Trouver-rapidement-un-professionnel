@@ -422,6 +422,27 @@ describe('serviceRequests : machine à états stricte', () => {
       setDoc(doc(client, 'serviceRequests', 'mr3'), { createdAt: serverTimestamp() }, { merge: true })
     );
   });
+
+  test('photos : le client peut joindre ses photos, le pro ne les touche pas', async () => {
+    await seedUser('cPh', 'client');
+    await seedUser('pPh', 'pro');
+    await seedRequest('mr4', 'cPh', 'pPh', 'pending');
+    const client = authedDb('cPh', 'client');
+    const pro = authedDb('pPh', 'pro');
+
+    // Le client ajoute des photos à sa demande (sans changer le statut).
+    await assertSucceeds(
+      setDoc(doc(client, 'serviceRequests', 'mr4'),
+        { photos: ['https://res.cloudinary.com/demo/image/upload/a.jpg'] },
+        { merge: true })
+    );
+    // Le pro ne modifie JAMAIS le champ photos (réservé au client).
+    await assertFails(
+      setDoc(doc(pro, 'serviceRequests', 'mr4'),
+        { photos: [] },
+        { merge: true })
+    );
+  });
 });
 
 describe('notifications : réservées au destinataire', () => {

@@ -9,6 +9,8 @@ import 'package:fixnow/routing/app_router.dart';
 import 'package:fixnow/services/local_notification_service.dart';
 import 'package:fixnow/services/notification_service.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
+import 'package:fixnow/features/notifications/notifications_controller.dart';
+import 'package:fixnow/models/notification_model.dart';
 
 /// Watches the signed-in Firebase user and keeps their FCM token in sync:
 /// registers the token on login, removes it on logout.
@@ -56,9 +58,45 @@ class _AppBindingsState extends ConsumerState<AppBindings> {
       FirebaseMessaging.onMessage.listen((message) {
         local.showForeground(message);
       });
+
+      // Notifications Firestore (in-app) → notification locale quand une
+      // notification NON LUE arrive pendant que l'app est ouverte.
+      // Sans Cloud Functions : l'événement est détecté par le stream.
+      final seenIds = <String>{};
+      var baselineDone = false;
+      ref.listenManual(notificationsProvider, (_, next) {
+        final items = next.valueOrNull;
+        if (items == null) return;
+        if (!baselineDone) {
+          // N'inonde pas au démarrage : baseline = déjà présentes.
+          seenIds.addAll(items.map((n) => n.id));
+          baselineDone = true;
+          return;
+        }
+        for (final n in items) {
+          if (n.read || !seenIds.add(n.id)) continue;
+          local.showAppNotification(
+            title: n.title,
+            body: n.body,
+            payload: _localPayloadFor(n),
+          );
+        }
+      });
     } catch (_) {
       // Push setup is best-effort; the app works without it.
     }
+  }
+
+  /// Payload de routage d'une notification locale (même format que les
+  /// données FCM : `newRequest`/`newMessage`), consommé par
+  /// [NotificationTapRouter].
+  String _localPayloadFor(NotificationItem n) {
+    final data = n.type == NotificationType.newMessage
+        ? {'type': 'newMessage', 'chatId': n.relatedId ?? ''}
+        : {'type': 'newRequest', 'requestId': n.relatedId ?? ''};
+    return data.entries
+        .map((e) => '${e.key}: ${e.value}')
+        .join(', ');
   }
 
   /// Replays a notification tap that happened while the user was logged

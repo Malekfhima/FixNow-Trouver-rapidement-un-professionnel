@@ -5,6 +5,22 @@ Chaque ligne renvoie au fichier modifié.
 
 ---
 
+## PARTIE 7 — 100 % gratuit (plan Spark) : Cloudinary, photos, notifications, finitions
+
+| # | Tâche | Correctif | Fichier(s) |
+|---|---|---|---|
+| 1 | **Firebase Storage → Cloudinary** | Storage exige Blaze → interdit. Upload HTTP multipart *unsigned* vers `api.cloudinary.com/v1_1/<cloud>/image/upload` avec `upload_preset`, retour `secure_url` ; config via `--dart-define` (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_UPLOAD_PRESET`), jamais en dur ; gardes conservées (5 Mo max, images uniquement) + messages FR via `ErrorMapper` ; même API publique (avatars, galerie pro, photos de demande, images de chat) ; suppression `firebase_storage`, `storage.rules(.test.js)`, bloc storage de `firebase.json`, script `test:storage-rules` ; dépendance `http` | `lib/services/storage_service.dart`, `pubspec.yaml`, `firebase.json`, `package.json`, `storage.rules` (supprimé), `storage.rules.test.js` (supprimé) |
+| 2 | **Photos dans la demande** | Sélection 1..`AppConstants.maxPhotosPerRequest` via `image_picker`, aperçu + suppression, upload AVANT création de la demande (échec photo ⇒ pas de demande créée), champ `photos[]` écrit par le client (autorisé par les règles, cf. faille 3 Partie 1) ; affichage des photos dans le détail commande (client) et côté pro | `lib/features/booking/booking_screen.dart`, `lib/features/booking/booking_controller.dart`, `lib/core/widgets/request_photo_gallery.dart` (nouveau), `lib/features/client_dashboard/order_detail_screen.dart`, `lib/features/pro_dashboard/pro_requests_screen.dart` |
+| 3 | **Notifications sans Cloud Functions** | Chaque événement clé crée une notification Firestore côté client (`notification_helpers`, conforme aux règles — liste blanche + lien réel) ; notification LOCALE quand l'app est ouverte et qu'une notif non lue arrive ; `cloud_functions` retiré du `pubspec.yaml` ; dossier `functions/` conservé avec README « optionnel (plan Blaze) » | `lib/features/notifications/notification_helpers.dart`, `lib/models/notification_model.dart`, `lib/services/local_notification_service.dart`, `pubspec.yaml`, `functions/README.md` (nouveau) |
+| 4 | **Auth téléphone désactivable** | Flag `ENABLE_PHONE_AUTH` (défaut `true`) via `--dart-define` : onglet téléphone masqué à l'écran de connexion + redirection de la route `/phone-auth` quand désactivé (quota SMS gratuit limité) ; mot de passe oublié + redirection par rôle vérifiés | `lib/core/config/app_runtime.dart`, `lib/features/auth/login_screen.dart`, `lib/routing/app_router.dart` |
+| 5 | **Finitions produit** | « Mes avis » pro (note moyenne + liste) ; note moyenne sur le profil (`StarRating`) ; annulation/modification de demande selon la machine à états ; paramètres/aide (thème, déconnexion, à propos, contact) dans le profil | `lib/features/pro_dashboard/pro_reviews_screen.dart` (nouveau), `lib/core/widgets/star_rating.dart`, `lib/features/client_dashboard/order_detail_screen.dart`, `lib/features/profile/profile_screen.dart` |
+| 6 | **Paiement simulé** | Interface `PaymentService` + `FakePaymentService` (acompte 30 %, latence simulée, id déterministe, validation des montants) — aucun vrai prestataire | `lib/services/payment_service.dart` (nouveau) |
+| 7 | **Tests** | `StorageService` (mock HTTP : URL/preset/public_id, >5 Mo refusé avant réseau, non-image refusé, erreurs Cloudinary → FR) ; garde photos du `BookingController` (limite + non-connecté, aucun accès distant) ; `FakePaymentService` ; machine à états (existant) | `test/storage_service_test.dart`, `test/booking_photos_test.dart`, `test/payment_service_test.dart`, `test/service_request_state_machine_test.dart` |
+
+**Vérifications Partie 7 :** `flutter analyze` → **0 problème** ; `flutter test` → **tous OK**.
+
+---
+
 ## PARTIE 1 — Backend : `firestore.rules`
 
 | # | Faille / bug | Cause | Correctif | Test (`firestore.rules.test.js`) |

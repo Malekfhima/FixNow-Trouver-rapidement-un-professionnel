@@ -27,6 +27,7 @@ import 'package:fixnow/features/notifications/notifications_screen.dart';
 import 'package:fixnow/features/admin/admin_screen.dart';
 import 'package:fixnow/features/pro_dashboard/pro_requests_screen.dart';
 import 'package:fixnow/features/pro_dashboard/pro_profile_edit_screen.dart';
+import 'package:fixnow/features/pro_dashboard/pro_reviews_screen.dart';
 import 'package:fixnow/features/profile/debug_seed_screen.dart';
 
 /// Route path constants.
@@ -56,7 +57,7 @@ class RoutePaths {
 }
 
 /// Routes reserved to professional accounts.
-const proOnlyRoutes = ['/pro-dashboard', '/pro-profile-edit'];
+const proOnlyRoutes = ['/pro-dashboard', '/pro-profile-edit', '/pro-reviews'];
 
 /// Routes reserved to admin accounts.
 const adminOnlyRoutes = ['/admin'];
@@ -104,6 +105,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // Firebase not configured: leave everything accessible (dev mode).
       if (!firebaseInitialized) return null;
+
+      // Connexion téléphone désactivée (--dart-define=ENABLE_PHONE_AUTH=false)
+      // : la route est neutralisée (quota SMS gratuit limité).
+      if (location == RoutePaths.phoneAuth && !phoneAuthEnabled) {
+        return RoutePaths.login;
+      }
 
       // Not logged in: only auth pages and onboarding are reachable.
       if (!isLoggedIn) {
@@ -245,6 +252,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/pro-profile-edit',
         builder: (context, state) => const ProProfileEditScreen(),
+      ),
+      GoRoute(
+        path: '/pro-reviews',
+        builder: (context, state) => const ProReviewsScreen(),
       ),
 
       // Dev-only demo data seeder (debug builds).
