@@ -443,7 +443,83 @@ describe('serviceRequests : machine à états stricte', () => {
         { merge: true })
     );
   });
-});
+
+  describe('serviceRequests : acompte — paiement simulé (depositPaid + depositId)', () => {
+    async function seedAccepted(id, clientId, proId) {
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'serviceRequests', id), {
+          clientId,
+          proId,
+          status: 'accepted',
+          description: 'test',
+          address: 'test',
+          price: 100,
+        });
+      });
+    }
+
+    test('le client enregistre l\'acompte (les 2 champs ENSEMBLE, bons types)', async () => {
+      await seedUser('cDep', 'client');
+      await seedUser('pDep', 'pro');
+      await seedAccepted('dp1', 'cDep', 'pDep');
+      const client = authedDb('cDep', 'client');
+
+      await assertSucceeds(
+        setDoc(doc(client, 'serviceRequests', 'dp1'),
+          { depositPaid: true, depositId: 'fake_dep_dp1' },
+          { merge: true })
+      );
+    });
+
+    test('un seul des deux champs : refusé (paire indissociable)', async () => {
+      await seedUser('cDep2', 'client');
+      await seedUser('pDep2', 'pro');
+      await seedAccepted('dp2', 'cDep2', 'pDep2');
+      const client = authedDb('cDep2', 'client');
+
+      await assertFails(
+        setDoc(doc(client, 'serviceRequests', 'dp2'),
+          { depositPaid: true },
+          { merge: true })
+      );
+      await assertFails(
+        setDoc(doc(client, 'serviceRequests', 'dp2'),
+          { depositId: 'fake_dep_dp2' },
+          { merge: true })
+      );
+    });
+
+    test('types invalides : refusés', async () => {
+      await seedUser('cDep3', 'client');
+      await seedUser('pDep3', 'pro');
+      await seedAccepted('dp3', 'cDep3', 'pDep3');
+      const client = authedDb('cDep3', 'client');
+
+      await assertFails(
+        setDoc(doc(client, 'serviceRequests', 'dp3'),
+          { depositPaid: 'oui', depositId: 'fake_dep_dp3' },
+          { merge: true })
+      );
+      await assertFails(
+        setDoc(doc(client, 'serviceRequests', 'dp3'),
+          { depositPaid: true, depositId: 42 },
+          { merge: true })
+      );
+    });
+
+    test('le pro ne touche JAMAIS aux champs d\'acompte', async () => {
+      await seedUser('cDep4', 'client');
+      await seedUser('pDep4', 'pro');
+      await seedAccepted('dp4', 'cDep4', 'pDep4');
+      const pro = authedDb('pDep4', 'pro');
+
+      await assertFails(
+        setDoc(doc(pro, 'serviceRequests', 'dp4'),
+          { depositPaid: true, depositId: 'fake_dep_dp4' },
+          { merge: true })
+      );
+    });
+  });
 
 describe('notifications : réservées au destinataire', () => {
   test("un participant crée une notification liée à LEUR conversation", async () => {

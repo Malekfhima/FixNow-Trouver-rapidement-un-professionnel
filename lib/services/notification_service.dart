@@ -3,8 +3,11 @@ import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fixnow/features/home/home_controller.dart'
+    show userProfileProvider;
 import 'package:fixnow/routing/app_router.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
+import 'package:fixnow/services/notification_routing.dart';
 
 /// Background message handler — must be a top-level function.
 @pragma('vm:entry-point')
@@ -53,26 +56,23 @@ class NotificationService {
     return duplicate;
   }
 
-  /// Routes the user according to a notification payload.
-  ///
-  /// Cloud Functions send `data.type` = `newRequest` (with `requestId`) or
-  /// `newMessage` (with `chatId`). Unknown types are ignored. When the user
-  /// is not signed in yet, the destination is kept in [pendingNavigation]
-  /// for a deferred redirect after login.
+  /// Routes the user according to a notification payload, using the shared
+  /// routing table ([resolveNotificationLocation]): `newMessage` → chat,
+  /// types liés à une demande → détail commande (client) ou demandes pro,
+  /// `reviewReceived` → « Mes avis », validation pro → profil/dashboard.
+  /// Unknown types are ignored. When the user is not signed in yet, the
+  /// destination is kept in [pendingNavigation] for a deferred redirect
+  /// after login.
   void handleNotificationTap(Map<String, dynamic> data) {
-    final type = data['type'];
-    String? location;
-    if (type == 'newRequest') {
-      final requestId = data['requestId'];
-      if (requestId is String && requestId.isNotEmpty) {
-        location = '/orders/$requestId';
-      }
-    } else if (type == 'newMessage') {
-      final chatId = data['chatId'];
-      if (chatId is String && chatId.isNotEmpty) {
-        location = '/chat/$chatId';
-      }
-    }
+    final type = data['type']?.toString() ?? '';
+    // FCM : `requestId`/`chatId` ; in-app : `relatedId`.
+    final relatedId =
+        (data['requestId'] ?? data['chatId'] ?? data['relatedId'])?.toString();
+    final location = resolveNotificationLocation(
+      type: type,
+      relatedId: relatedId,
+      isPro: _isCurrentUserPro(),
+    );
     if (location == null) return;
     // Rejette la seconde livraison du même tap (FCM) ou un push vers la
     // page déjà affichée.
@@ -97,6 +97,21 @@ class NotificationService {
     } catch (_) {
       // Router not ready yet — keep the destination for after login.
       pendingNavigation = (location: location, at: DateTime.now());
+    }
+  }
+
+  /// Rôle du compte courant (best-effort) : true si pro. En cas de profil
+  /// absent ou d'erreur, on considère « client » — la route `/orders/<id>`
+  /// reste accessible aux pros participants.
+  bool _isCurrentUserPro() {
+    try {
+      return _routerContainer
+              ?.read(userProfileProvider)
+              .valueOrNull
+              ?.isPro ??
+          false;
+    } catch (_) {
+      return false;
     }
   }
 

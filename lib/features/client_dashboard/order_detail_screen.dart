@@ -12,6 +12,7 @@ import 'package:fixnow/models/service_request_model.dart';
 import 'package:fixnow/models/user_model.dart';
 import 'package:fixnow/services/firebase_auth_service.dart';
 import 'package:fixnow/services/firestore_service.dart';
+import 'package:fixnow/services/payment_service.dart';
 
 /// Détail d'une demande de service, ouvert depuis une notification push
 /// (`newRequest` → route `/orders/{requestId}`).
@@ -102,6 +103,7 @@ class _OrdersDetailScreenState extends ConsumerState<OrdersDetailScreen> {
             onEdit: request.status == ServiceRequestStatus.pending
                 ? () => _editRequest(request)
                 : null,
+            onPayDeposit: request.depositPaid ? null : () => _payDeposit(request),
           );
         },
       ),
@@ -121,7 +123,38 @@ class _OrdersDetailScreenState extends ConsumerState<OrdersDetailScreen> {
       if (!mounted) return;
       AppAlerts.success(
           context, target == ServiceRequestStatus.accepted ? 'Devis accepté' : 'Demande annulée');
-      context.go('/orders');
+      // Devis accepté : on RESTE sur l'écran — le bouton « Payer l'acompte »
+      // apparaît dès le rafraîchissement du stream. Annulation : retour liste.
+      if (target != ServiceRequestStatus.accepted) context.go('/orders');
+    } catch (e) {
+      if (!mounted) return;
+      AppAlerts.error(context, ErrorMapper.message(e));
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  /// Paie l'ACOMPTE (30 % du devis) via le paiement SIMULÉ
+  /// ([FakePaymentService] — aucun vrai prestataire), puis enregistre
+  /// l'état sur la demande (`depositPaid` + `depositId`, écrits ensemble
+  /// comme l'exigent les règles Firestore).
+  Future<void> _payDeposit(ServiceRequest request) async {
+    final price = request.price;
+    if (price == null || price <= 0 || request.depositPaid) return;
+    if (_acting) return;
+    setState(() => _acting = true);
+    try {
+      final payment = ref.read(paymentServiceProvider);
+      final result = await payment.payDeposit(
+        orderId: request.id,
+        amount: FakePaymentService.depositFor(price),
+      );
+      await ref.read(firestoreServiceProvider).updateServiceRequest(
+        request.id,
+        {'depositPaid': true, 'depositId': result.transactionId},
+      );
+      if (!mounted) return;
+      AppAlerts.success(context, 'Acompte payé (paiement simulé)');
     } catch (e) {
       if (!mounted) return;
       AppAlerts.error(context, ErrorMapper.message(e));
@@ -251,6 +284,9 @@ class _RequestDetail extends StatelessWidget {
   final VoidCallback onDecline;
   final VoidCallback? onEdit;
 
+  /// Payer l'acompte (null = déjà payé → bandeau de confirmation).
+  final VoidCallback? onPayDeposit;
+
   const _RequestDetail({
     required this.request,
     required this.pro,
@@ -258,6 +294,7 @@ class _RequestDetail extends StatelessWidget {
     required this.onAcceptQuote,
     required this.onDecline,
     this.onEdit,
+    this.onPayDeposit,
   });
 
   @override
@@ -360,6 +397,53 @@ class _RequestDetail extends StatelessWidget {
             ),
           ),
         if (request.price != null) const SizedBox(height: AppSpacing.md),
+
+        // ── Acompte (PAIEMENT SIMULÉ — aucun vrai prestataire) ──────────
+        if (request.price != null &&
+            (request.status == ServiceRequestStatus.accepted ||
+                request.status == ServiceRequestStatus.inProgress ||
+                request.status == ServiceRequestStatus.completed)) ...[
+          if (request.depositPaid)
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.08),
+                borderRadius: AppRadius.mdAll,
+                border: Border.all(color: AppColors.success.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_outline_rounded,
+                      color: AppColors.success, size: 20),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      'Acompte réglé · Paiement simulé',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            FilledButton.icon(
+              onPressed: acting ? null : onPayDeposit,
+              icon: acting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.payment_rounded, size: 18),
+              label: Text(
+                'Payer l\'acompte '
+                '(${FakePaymentService.depositFor(request.price!).toStringAsFixed(2)} €)'
+                ' — Paiement simulé',
+              ),
+            ),
+          const SizedBox(height: AppSpacing.md),
+        ],
 
         // Actions client : accepter un devis reçu ou annuler une demande
         // en attente (transitions autorisées par les règles Firestore).

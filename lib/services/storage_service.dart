@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 
 /// Erreur métier du service d'images.
 /// Le message est déjà en français : [ErrorMapper] le renvoie tel quel.
@@ -100,8 +101,11 @@ class StorageService {
     }
 
     // public_id dérivé du chemin logique (avatars/uid, requests/…, chats/…)
-    // pour garder une trace de l'organisation d'origine.
-    final publicId = path.replaceAll(RegExp(r'[^a-zA-Z0-9/_-]'), '_');
+    // + suffixe UNIQUE : en mode unsigned Cloudinary refuse d'écraser un
+    // public_id existant (erreur 400) — sans suffixe, remplacer un avatar
+    // ou renvoyer une photo échouerait.
+    final publicId =
+        '${path.replaceAll(RegExp(r'[^a-zA-Z0-9/_-]'), '_')}_${_uniqueSuffix()}';
 
     final request = http.MultipartRequest('POST', _uploadUri)
       ..fields['upload_preset'] = _effectiveUploadPreset
@@ -187,6 +191,10 @@ class StorageService {
       contentType: 'image/jpeg',
     );
   }
+
+  /// Suffixe unique du public_id (uuid v4) — garantit un upload neuf à
+  /// chaque envoi (pas d'écrasement refusé en mode unsigned).
+  static String _uniqueSuffix() => const Uuid().v4().substring(0, 8);
 
   /// Chooses a plausible file name (Cloudinary s'en sert pour détecter
   /// le format quand aucun MediaType n'est fourni).

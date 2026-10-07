@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -51,10 +53,14 @@ class LocalNotificationService {
 
   /// Displays an app-opened notification (new unread Firestore notification
   /// while the app is in the foreground — no Cloud Functions involved).
+  /// [id] : identifiant LOCAL de la notification — utiliser un hash stable
+  /// (ex. [NotificationTapRouter.stableId] de l'id Firestore) pour qu'un
+  /// rappel du même événement remplace la notification au lieu d'en créer une.
   Future<void> showAppNotification({
     required String title,
     required String body,
     String? payload,
+    int? id,
   }) async {
     if (defaultTargetPlatform != TargetPlatform.android &&
         defaultTargetPlatform != TargetPlatform.iOS) {
@@ -63,7 +69,7 @@ class LocalNotificationService {
     if (title.isEmpty && body.isEmpty) return;
 
     await _plugin.show(
-      id: (title + body).hashCode,
+      id: id ?? (title + body).hashCode,
       title: title.isEmpty ? channelName : title,
       body: body,
       notificationDetails: const NotificationDetails(
@@ -108,34 +114,70 @@ class LocalNotificationService {
         ),
         iOS: DarwinNotificationDetails(),
       ),
-      payload: message.data.isNotEmpty ? message.data.toString() : null,
+      payload: message.data.isEmpty
+          ? null
+          : NotificationTapRouter.encodePayload(message.data),
     );
   }
 
   /// Foreground tap → same routing as a background notification tap.
   void _onTap(NotificationResponse response) {
-    final payload = response.payload;
-    if (payload == null || payload.isEmpty) return;
+    final data = NotificationTapRouter.decodePayload(response.payload);
+    if (data.isEmpty) return;
     try {
-      // Payload written by [showForeground] as Dart map string.
-      final data = <String, dynamic>{};
-      final inner = payload.substring(1, payload.length - 1);
-      for (final pair in inner.split(', ')) {
-        final idx = pair.indexOf(': ');
-        if (idx <= 0) continue;
-        data[pair.substring(0, idx)] = pair.substring(idx + 2);
-      }
       NotificationTapRouter.route(data);
     } catch (_) {
-      // Malformed payload: ignore.
+      debugPrint('notification tap routing failed');
     }
   }
 }
 
 /// Indirection so the local-notification tap callback can reach the global
 /// [NotificationService.handleNotificationTap] without a dependency cycle.
+///
+/// Le payload des notifications locales est du **JSON** (`jsonEncode` côté
+/// émetteur, `jsonDecode` côté tap) — l'ancien format « map Dart en texte »
+/// était fragile (clés corrompues par `substring`).
 class NotificationTapRouter {
   static void Function(Map<String, dynamic> data)? handler;
 
   static void route(Map<String, dynamic> data) => handler?.call(data);
+
+  /// Sérialise un payload de routage en JSON ; renvoie null si les valeurs
+  /// ne sont pas encodables (les données FCM sont des chaînes).
+  static String? encodePayload(Map<String, dynamic> data) {
+    try {
+      return jsonEncode(data);
+    } catch (e) {
+      debugPrint('notification payload encode failed: $e');
+      return null;
+    }
+  }
+
+  /// Décode un payload JSON ; renvoie une map vide si malformé (jamais
+  /// d'exception — un tap ne doit jamais crasher l'app).
+  static Map<String, dynamic> decodePayload(String? payload) {
+    if (payload == null || payload.isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) {
+        return decoded.map((k, v) => MapEntry(k.toString(), v));
+      }
+    } catch (e) {
+      debugPrint('notification payload decode failed: $e');
+    }
+    return const {};
+  }
+
+  /// Hash stable (FNV-1a 32 bits, borné positif) — identifiant de
+  /// notification locale déterministe dérivé de l'id Firestore.
+  static int stableId(String key) {
+    var hash = 0x811c9dc5;
+    for (final unit in key.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 0x01000193) & 0x7fffffff;
+    }
+    return hash;
+  }
 }

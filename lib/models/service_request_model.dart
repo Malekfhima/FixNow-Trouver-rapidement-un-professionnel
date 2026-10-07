@@ -27,6 +27,12 @@ class ServiceRequest {
   final double? price;
   final double? quotePrice;
   final String? quoteNote;
+
+  /// Acompte réglé (PAIEMENT SIMULÉ, `FakePaymentService`) — écrit par le
+  /// client après acceptation du devis. Les règles Firestore exigent que
+  /// `depositPaid` et `depositId` soient écrits ensemble (bool + string).
+  final bool depositPaid;
+  final String? depositId;
   final String address;
   final DateTime? scheduledDate;
   final DateTime createdAt;
@@ -44,6 +50,8 @@ class ServiceRequest {
     this.price,
     this.quotePrice,
     this.quoteNote,
+    this.depositPaid = false,
+    this.depositId,
     required this.address,
     this.scheduledDate,
     required this.createdAt,
@@ -67,6 +75,8 @@ class ServiceRequest {
       price: data['price']?.toDouble(),
       quotePrice: data['quotePrice']?.toDouble(),
       quoteNote: data['quoteNote'],
+      depositPaid: data['depositPaid'] ?? false,
+      depositId: data['depositId'],
       address: data['address'] ?? '',
       scheduledDate: (data['scheduledDate'] as Timestamp?)?.toDate(),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -86,6 +96,8 @@ class ServiceRequest {
       'price': price,
       'quotePrice': quotePrice,
       'quoteNote': quoteNote,
+      'depositPaid': depositPaid,
+      'depositId': depositId,
       'address': address,
       'scheduledDate':
           scheduledDate != null ? Timestamp.fromDate(scheduledDate!) : null,
@@ -103,6 +115,8 @@ class ServiceRequest {
     double? price,
     double? quotePrice,
     String? quoteNote,
+    bool? depositPaid,
+    String? depositId,
     String? address,
     DateTime? scheduledDate,
   }) {
@@ -118,6 +132,8 @@ class ServiceRequest {
       price: price ?? this.price,
       quotePrice: quotePrice ?? this.quotePrice,
       quoteNote: quoteNote ?? this.quoteNote,
+      depositPaid: depositPaid ?? this.depositPaid,
+      depositId: depositId ?? this.depositId,
       address: address ?? this.address,
       scheduledDate: scheduledDate ?? this.scheduledDate,
       createdAt: createdAt,

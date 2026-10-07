@@ -79,6 +79,9 @@ class _AppBindingsState extends ConsumerState<AppBindings> {
             title: n.title,
             body: n.body,
             payload: _localPayloadFor(n),
+            // Id local stable dérivé de l'id Firestore (pas title+body) :
+            // un même événement remplace la notification existante.
+            id: NotificationTapRouter.stableId(n.id),
           );
         }
       });
@@ -87,16 +90,14 @@ class _AppBindingsState extends ConsumerState<AppBindings> {
     }
   }
 
-  /// Payload de routage d'une notification locale (même format que les
-  /// données FCM : `newRequest`/`newMessage`), consommé par
-  /// [NotificationTapRouter].
-  String _localPayloadFor(NotificationItem n) {
+  /// Payload de routage d'une notification locale — **JSON** (même
+  /// sémantique que les données FCM : `type` + `requestId`/`chatId`),
+  /// décodé par [NotificationTapRouter.decodePayload] au tap.
+  String? _localPayloadFor(NotificationItem n) {
     final data = n.type == NotificationType.newMessage
         ? {'type': 'newMessage', 'chatId': n.relatedId ?? ''}
-        : {'type': 'newRequest', 'requestId': n.relatedId ?? ''};
-    return data.entries
-        .map((e) => '${e.key}: ${e.value}')
-        .join(', ');
+        : {'type': n.type.name, 'relatedId': n.relatedId ?? ''};
+    return NotificationTapRouter.encodePayload(data);
   }
 
   /// Replays a notification tap that happened while the user was logged

@@ -57,8 +57,8 @@ void main() {
       expect(capturedUrl!.host, 'api.cloudinary.com');
       expect(capturedUrl!.path, '/v1_1/test-cloud/image/upload');
       expect(capturedPreset, 'test-preset');
-      expect(capturedPublicId, 'avatars/u1',
-          reason: 'le public_id conserve la structure de dossiers');
+      expect(capturedPublicId, matches(RegExp(r'^avatars/u1_[0-9a-f]{8}$')),
+          reason: 'le public_id garde la structure de dossiers + suffixe unique');
       expect(capturedFileField, isTrue, reason: 'le fichier doit être envoyé');
     });
 
@@ -155,12 +155,34 @@ void main() {
       await service.uploadRequestPhoto('req1', 0, file);
       await service.uploadChatImage('chat1', 'msg1', file);
 
-      expect(publicIds, [
-        'avatars/u1',
-        'gallery/u1/3',
-        'requests/req1/0',
-        'chats/chat1/msg1',
-      ]);
+      expect(
+        publicIds.map((id) => id.replaceAll(RegExp(r'_[0-9a-f]{8}$'), '')),
+        ['avatars/u1', 'gallery/u1/3', 'requests/req1/0', 'chats/chat1/msg1'],
+        reason: 'le préfixe conserve la structure de dossiers',
+      );
+      expect(publicIds.toSet().length, publicIds.length,
+          reason: 'chaque upload a un public_id unique');
+    });
+
+    test('même chemin envoyé deux fois : public_id distincts (pas d\'écrasement)',
+        () async {
+      final publicIds = <String>[];
+      final client = MockClient((request) async {
+        final body = utf8.decode(request.bodyBytes);
+        publicIds.add(RegExp('name="public_id"\\r\\n\\r\\n([^\\r]*)')
+                .firstMatch(body)
+                ?.group(1) ??
+            '');
+        return http.Response(jsonEncode({'secure_url': 'https://x/y.jpg'}), 200);
+      });
+      final service = _service(client);
+      final file = _jpeg();
+
+      await service.uploadAvatar('u1', file);
+      await service.uploadAvatar('u1', file);
+
+      expect(publicIds[0], isNot(publicIds[1]),
+          reason: 'mode unsigned : Cloudinary refuse d\'écraser un public_id existant');
     });
   });
 }

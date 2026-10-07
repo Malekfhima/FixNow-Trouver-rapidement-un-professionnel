@@ -184,3 +184,41 @@ Aux questions du CLI :
 > Sans Firebase CLI connecté, on peut aussi télécharger `GoogleService-Info.plist`
 > depuis Console Firebase → Paramètres du projet → votre app iOS → **Télécharger
 > le fichier de configuration**, puis le déposer dans `ios/Runner/`.
+
+---
+
+## 3. Fournisseurs d'authentification à activer (Email/Password, Google, Phone)
+
+Console Firebase → **Authentication** → onglet **Sign-in method**.
+Un fournisseur désactivé provoque `operation-not-allowed` — message déjà
+mappé en français par `ErrorMapper` (« …activez le fournisseur dans la
+console Firebase → Authentication »).
+
+| Fournisseur | Étapes | Couvre |
+|---|---|---|
+| **Email/Password** | Sign-in method → Email/Password → *Enable* → *Save* | Inscription, connexion, **mot de passe oublié par email** (lien Firebase) |
+| **Google** | Sign-in method → Google → *Enable* → *Save* | « Continuer avec Google » (création + connexion Gmail). **Prérequis** : empreintes SHA-1/SHA-256 déclarées (§1) puis `google-services.json` re-téléchargé — sinon `DEVELOPER_ERROR` / `oauth_client` vide |
+| **Phone** | Sign-in method → Phone → *Enable* → *Save* | Connexion par SMS, **liaison du numéro à l'inscription**, **mot de passe oublié par SMS** |
+
+### 3.1 Détails et pièges Phone
+
+- Onglet **Phone** : *Phone numbers for testing* (numéros + codes fixes,
+  sans SMS réel — pratique pour l'émulateur) et *Authorized domains*
+  (ajouter `localhost` si l'émulateur est utilisé).
+- Quota SMS gratuit limité : d'où le flag `ENABLE_PHONE_AUTH=false` qui masque
+  les parcours téléphone (voir README).
+- **Le reset par SMS ne concerne que les comptes où le numéro est lié** :
+  la liaison se fait à l'inscription (champ téléphone optionnel → code SMS →
+  `updatePhoneNumber`). Sans numéro lié, la vérification SMS créerait un
+  compte vide — l'app détecte ce cas et invite à réinitialiser par email.
+
+### 3.2 Vérification
+
+1. `flutter run` → écran de connexion : Email/Google/Téléphone réagissent,
+   aucun `operation-not-allowed`.
+2. Inscription **avec** un téléphone : l'étape « Lier votre numéro » s'affiche
+   après la création du compte, puis `users/<uid>.phone` est renseigné.
+3. Mot de passe oublié → onglet *Téléphone* → code SMS reçu → le formulaire
+   « nouveau mot de passe » s'affiche → retour à l'écran de connexion.
+4. Mot de passe oublié → onglet *Email* → le lien de réception arrive.
+

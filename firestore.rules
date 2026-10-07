@@ -220,11 +220,23 @@ service cloud.firestore {
       function statusUnchanged() { return toStatus() == fromStatus(); }
 
       // Le client ne modifie que : status, description, photos, address,
-      // scheduledDate (+ updatedAt, horodatage technique).
+      // scheduledDate, depositPaid + depositId (paiement SIMULÉ de l'acompte)
+      // (+ updatedAt, horodatage technique).
       function clientKeysOk() {
         return touchedKeys().hasOnly(
-          ['status', 'description', 'photos', 'address', 'scheduledDate', 'updatedAt']
+          ['status', 'description', 'photos', 'address', 'scheduledDate',
+           'depositPaid', 'depositId', 'updatedAt']
         );
+      }
+
+      // Acompte (paiement simulé) : les deux champs sont écrits ENSEMBLE par
+      // le client, avec les bons types (bool + string). Jamais touchés par
+      // le pro — depositKeysOk ne s'applique qu'à la branche client.
+      function depositKeysOk() {
+        return !touchedKeys().hasAny(['depositPaid', 'depositId'])
+          || (touchedKeys().hasAll(['depositPaid', 'depositId'])
+              && request.resource.data.depositPaid is bool
+              && request.resource.data.depositId is string);
       }
 
       // Le pro ne modifie que : status, quotePrice, quoteNote, price.
@@ -255,6 +267,7 @@ service cloud.firestore {
         && (
           (resource.data.clientId == request.auth.uid
             && clientKeysOk()
+            && depositKeysOk()
             && clientTransitionOk())
           || (resource.data.proId == request.auth.uid
             && proKeysOk()

@@ -199,6 +199,21 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  /// Sets a new password for the user who just proved ownership of their
+  /// phone number (OTP). Returns true on success; errors are mapped to
+  /// French in [AuthState.error].
+  Future<bool> updatePassword(String newPassword) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _authService.updatePassword(newPassword);
+      state = state.copyWith(isLoading: false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: ErrorMapper.message(e));
+      return false;
+    }
+  }
+
   /// Signs the user out. Never throws — the UI always navigates back to
   /// the login screen, and a failure is surfaced in [AuthState.error].
   Future<void> signOut() async {

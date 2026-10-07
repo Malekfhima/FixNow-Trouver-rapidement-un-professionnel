@@ -5,8 +5,11 @@ import 'package:timeago/timeago.dart' as timeago;
 import 'package:fixnow/core/theme/app_theme.dart';
 import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/skeleton.dart';
+import 'package:fixnow/features/home/home_controller.dart'
+    show userProfileProvider;
 import 'package:fixnow/features/notifications/notifications_controller.dart';
 import 'package:fixnow/models/notification_model.dart';
+import 'package:fixnow/services/notification_routing.dart';
 
 /// Locale init (once per app run — not in build).
 bool _timeagoLocaleRegistered = false;
@@ -80,13 +83,17 @@ class _NotificationTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final (icon, color) = _iconFor(context, item.type);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: item.read ? Theme.of(context).colorScheme.surface : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.35),
+    // tileColor + shape (et non un Container décoré) : un ListTile peint
+    // son fond sur le Material ancêtre — un DecoratedBox intermédiaire le
+    // masquerait (assertion Flutter en test).
+    return ListTile(
+      tileColor: item.read
+          ? Theme.of(context).colorScheme.surface
+          : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.35),
+      shape: RoundedRectangleBorder(
         borderRadius: AppRadius.mdAll,
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
       ),
-      child: ListTile(
         leading: CircleAvatar(
           backgroundColor: color.withValues(alpha: 0.12),
           child: Icon(icon, color: color, size: 22),
@@ -119,7 +126,6 @@ class _NotificationTile extends ConsumerWidget {
                     .read(notificationsControllerProvider.notifier)
                     .markRead(item.id),
               ),
-      ),
     );
   }
 
@@ -128,26 +134,15 @@ class _NotificationTile extends ConsumerWidget {
     if (!item.read) {
       ref.read(notificationsControllerProvider.notifier).markRead(item.id);
     }
-    switch (item.type) {
-      case NotificationType.quoteReceived:
-      case NotificationType.requestStarted:
-      case NotificationType.reviewReceived:
-      case NotificationType.requestAccepted:
-      case NotificationType.requestDeclined:
-      case NotificationType.requestCompleted:
-      case NotificationType.requestCancelled:
-        if (item.relatedId != null) context.push('/orders');
-        break;
-      case NotificationType.newMessage:
-        if (item.relatedId != null) context.push('/chat/${item.relatedId}');
-        break;
-      case NotificationType.proApproved:
-      case NotificationType.proRejected:
-        context.push('/profile');
-        break;
-      case NotificationType.generic:
-        break;
-    }
+    // Même table de routage que le tap sur notification locale / push FCM.
+    final isPro =
+        ref.read(userProfileProvider).valueOrNull?.isPro ?? false;
+    final location = resolveNotificationLocation(
+      type: item.type.name,
+      relatedId: item.relatedId,
+      isPro: isPro,
+    );
+    if (location != null) context.push(location);
   }
 
   (IconData, Color) _iconFor(BuildContext context, NotificationType type) {

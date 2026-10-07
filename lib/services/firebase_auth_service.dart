@@ -115,6 +115,13 @@ class FirebaseAuthService {
     );
   }
 
+  /// Signs in with an ALREADY-BUILT phone credential (auto-retrieval
+  /// path of `verifyPhoneNumber`, where Firebase hands over a credential
+  /// instead of a verificationId).
+  Future<UserCredential> signInWithPhone(PhoneAuthCredential credential) {
+    return _auth.signInWithCredential(credential);
+  }
+
   Future<UserCredential> signInWithPhoneCredential({
     required String verificationId,
     required String smsCode,
@@ -150,6 +157,57 @@ class FirebaseAuthService {
       }
       rethrow;
     }
+  }
+
+  // ── Liaison du numéro de téléphone (reset par SMS) ─────────────
+
+  /// Builds a phone credential WITHOUT signing in — used to LINK the
+  /// number to the account that is already signed in (inscription ou
+  /// profil), là où [signInWithPhoneCredential] créerait/connecterait à
+  /// un autre compte.
+  PhoneAuthCredential phoneCredential({
+    required String verificationId,
+    required String smsCode,
+  }) {
+    return PhoneAuthProvider.credential(
+      verificationId: verificationId,
+      smsCode: smsCode,
+    );
+  }
+
+  /// Links (or replaces) the phone number of the CURRENT user — requires a
+  /// fresh session (right after signup or OTP verification).
+  ///
+  /// C'est cette liaison qui rend possible le « mot de passe oublié par
+  /// SMS » : le numéro doit appartenir au compte pour que le code SMS
+  /// retrouve le bon compte au lieu d'en créer un nouveau.
+  Future<void> linkPhoneNumber(PhoneAuthCredential credential) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'no-current-user',
+        message: 'Aucune session active.',
+      );
+    }
+    await user.updatePhoneNumber(credential);
+  }
+
+  /// Changes the password of the currently signed-in user.
+  ///
+  /// Used by the "mot de passe oublié par téléphone" flow : the user has
+  /// just proved ownership of the phone number with an OTP (fresh session,
+  /// so Firebase accepts the update). Throws [FirebaseAuthException]
+  /// (`no-current-user`) when nobody is signed in — mapped to French by
+  /// `ErrorMapper`.
+  Future<void> updatePassword(String newPassword) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'no-current-user',
+        message: 'Aucune session active.',
+      );
+    }
+    await user.updatePassword(newPassword);
   }
 
   /// Signs the user out. Firebase Auth first (the part that really

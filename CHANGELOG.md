@@ -5,6 +5,37 @@ Chaque ligne renvoie au fichier modifié.
 
 ---
 
+## PARTIE 9 — Auth complète : Google, téléphone, mot de passe oublié (email ou SMS)
+
+| # | Tâche | Correctif | Fichier(s) |
+|---|---|---|---|
+| 1 | **Création de compte Gmail** | Bouton « Continuer avec Google » ajouté à l'écran d'inscription (profil Firestore créé par le contrôleur, comme à la connexion) — avant : seul l'écran de connexion en avait un | `lib/features/auth/register_screen.dart` |
+| 2 | **Numéro lié à l'inscription** | Champ **téléphone optionnel** à l'inscription + étape « Lier votre numéro » (code SMS → `updatePhoneNumber` et NON `signInWithCredential` : on LIE le numéro au compte email au lieu de connecter à un autre compte) ; `users/<uid>.phone` synchronisé en best-effort. C'est cette liaison qui rend le reset SMS possible | `register_screen.dart`, `lib/services/firebase_auth_service.dart` (`phoneCredential`, `linkPhoneNumber`, `signInWithPhone`) |
+| 3 | **Mot de passe oublié par SMS** | Onglets **Email / Téléphone** : OTP → contrôles (compte existant ? possède-t-il un mot de passe ?) → nouveau mot de passe (`updatePassword`) → fermeture de la session SMS → retour connexion. Compte créé à l'instant ou compte « téléphone » : message explicite + repli sur l'email. Onglet masqué si `ENABLE_PHONE_AUTH=false` | `forgot_password_screen.dart`, `auth_controller.dart`, `firebase_auth_service.dart` |
+| 4 | **Erreurs FR** | `no-current-user`, `phone-number-already-in-use`, `credential-already-in-use`, `provider-already-linked` + `operation-not-allowed` renvoyant vers la console | `lib/core/services/error_mapper.dart` |
+| 5 | **Docs console** | Procédure d'activation Email/Password + Google (SHA-1) + Phone (numéros de test, domaines, quotas) et checklist RECAP | `docs/FIREBASE_SETUP.md` §3, `README.md`, `docs/RECAP.md` |
+| 6 | **Tests** | 7 tests : contrôleur `updatePassword` (succès / échec FR), erreurs de liaison, onglets Email/Téléphone du reset (validation SMS), inscription (bouton Google + numéro invalide refusé) | `test/auth_reset_test.dart` (nouveau) |
+
+**Vérifications Partie 9 :** `flutter analyze` → **0 problème** ; `flutter test` → **84/84 OK**.
+
+---
+
+## PARTIE 8 — Fiabilisation notifications, uploads, paiement simulé branché
+
+| # | Tâche | Correctif | Fichier(s) |
+|---|---|---|---|
+| 1 | **Routage des notifications locales (bug)** | L'ancien payload « map Dart en texte » (`substring(1, length-1)` au décodage) corrompait les clés. Remplacé par du **JSON** (`jsonEncode`/`jsonDecode`) des deux côtés — y compris pour `showForeground` FCM — avec try/catch : payload malformé → map vide, jamais d'exception | `lib/core/widgets/app_bindings.dart` (`_localPayloadFor` → JSON + id stable), `lib/services/local_notification_service.dart` (`NotificationTapRouter.encodePayload/decodePayload/stableId`), test `test/notification_payload_test.dart` (aller-retour newRequest/newMessage) |
+| 2 | **Routage par type** | Table partagée et pure `resolveNotificationLocation` : `newMessage` → `/chat/<id>` ; types de demande → `/orders/<id>` (client) ou `/pro-dashboard` (pro) ; `reviewReceived` → `/pro-reviews` ; `proApproved/proRejected` → `/pro-profile-edit` ou `/pro-dashboard` ; type inconnu/generic ignoré. Appliquée au tap local/FCM **et** à la liste in-app (avant : request* → `/orders` liste, proApproved → `/profile`). Id local : hash FNV-1a stable de l'id Firestore (plus `title+body.hashCode`) | `lib/services/notification_routing.dart` (nouveau), `lib/services/notification_service.dart`, `lib/features/notifications/notifications_screen.dart`, test `test/notification_routing_test.dart` (client vs pro + type inconnu) |
+| 3 | **public_id unique Cloudinary** | En mode unsigned Cloudinary refuse d'écraser un `public_id` existant (erreur 400). Suffixe uuid (8 car.) ajouté à chaque upload — évite l'échec au remplacement d'avatar / renvoi de photo. Doc preset étendue (unsigned, formats images, 5 Mo, dossier `fixnow`) | `lib/services/storage_service.dart`, `test/storage_service_test.dart` (préfixes + unicité + 2 uploads distincts), `README.md` |
+| 4 | **Paiement simulé branché** | Bouton « Payer l'acompte (30,00 €) — Paiement simulé » après acceptation du devis, chargement + succès/erreur via `ErrorMapper` (`PaymentException` mappé), enregistrement `depositPaid` + `depositId` **écrits ensemble** (règles : paire indissociable, types bool+string, pro exclu). Bandeau « Acompte réglé · Paiement simulé » une fois payé ; après acceptation du devis on reste sur l'écran (avant : retour liste immédiat) | `firestore.rules` (`clientKeysOk` + `depositKeysOk`), `firestore.rules.test.js` (4 tests émulateur : paire/indissociable/types/pro exclu), `lib/models/service_request_model.dart` (depositPaid/depositId), `lib/features/client_dashboard/order_detail_screen.dart`, `lib/core/services/error_mapper.dart`, test `test/quality_screens_test.dart` (tap → écriture vérifiée) |
+| 5 | **Qualité / widget tests** | Assertion `ListTile` corrigée dans la liste de notifications (`tileColor`+`shape` au lieu d'un Container décoré qui masquait le fond). 9 tests à 320 dp ×1.5 sans overflow : notifications (vide/nominal/erreur), détail commande (photos+acompte, déja payé, introuvable), Mes avis (vide/nominal/erreur). États chat déjà conformes (chargement/erreur FR/Réessayer/état vide) | `lib/features/notifications/notifications_screen.dart`, test `test/quality_screens_test.dart` (nouveau) |
+| 6 | **Nettoyage & docs** | Bloc `functions` retiré de `firebase.json` (dossier `functions/` reste optionnel, documented). `docs/RECAP.md` mis à jour (plus de Storage/Functions : Cloudinary + notifications client). README : commande de lancement complète `--dart-define` | `firebase.json`, `docs/RECAP.md`, `README.md`, `CHANGELOG.md` |
+| 7 | **CI : tests des règles** | Job `firestore-rules` ajouté (Node 20 + Java 17 + `npm ci` + `npm run test:rules` sur émulateur) — Java absent en local, la CI devient le seul endroit où les règles sont testées | `.github/workflows/ci.yml` |
+
+**Vérifications Partie 8 :** `flutter analyze` → **0 problème** ; `flutter test` → **77/77 OK**.
+
+---
+
 ## PARTIE 7 — 100 % gratuit (plan Spark) : Cloudinary, photos, notifications, finitions
 
 | # | Tâche | Correctif | Fichier(s) |

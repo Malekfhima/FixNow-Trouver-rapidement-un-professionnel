@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fixnow/services/firebase_auth_service.dart'
     show GoogleSignInAbortedException;
+import 'package:fixnow/services/payment_service.dart' show PaymentException;
 import 'package:fixnow/services/storage_service.dart' show StorageException;
 
 /// Single place that converts technical exceptions into clear,
@@ -21,6 +22,7 @@ class ErrorMapper {
       return 'Connexion Google annulée.';
     }
     if (error is StorageException) return error.message;
+    if (error is PaymentException) return error.message;
     if (error is FirebaseAuthException) return _auth(error);
     if (error is FirebaseException) return _firestore(error);
     if (error is TimeoutException) {
@@ -71,10 +73,18 @@ class ErrorMapper {
         return 'Veuillez vous reconnecter pour effectuer cette action.';
       case 'invalid-verification-code':
         return 'Code de vérification incorrect.';
+      case 'no-current-user':
+        return 'Session expirée : vérifiez le code SMS puis réessayez.';
       case 'invalid-phone-number':
         return 'Numéro de téléphone invalide (format international, ex. +33…).';
       case 'operation-not-allowed':
-        return 'Cette méthode de connexion est désactivée.';
+        return 'Cette méthode de connexion est désactivée (activez le '
+            'fournisseur dans la console Firebase → Authentication).';
+      case 'phone-number-already-in-use':
+      case 'credential-already-in-use':
+        return 'Ce numéro est déjà associé à un autre compte.';
+      case 'provider-already-linked':
+        return 'Ce numéro est déjà lié à votre compte.';
       case 'google-account':
         return 'Ce compte utilise la connexion Google : connectez-vous avec Google (aucun mot de passe à réinitialiser).';
       case 'google-missing-token':
