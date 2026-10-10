@@ -18,9 +18,10 @@ les abus venant de clients non autorisés (app tierce, script, bot).
    ```
    App Check debug token: 6F3A1C…-xxxx-xxxx-xxxx
    ```
-   Le même jeton peut être injecté en CI via
-   `--dart-define=APP_CHECK_DEBUG_TOKEN=<jeton>`.
-3. Le jeton change à la réinstallation de l'app / effacement des données :
+3. Enregistrer le jeton affiché dans la console Firebase comme indiqué
+   ci-dessous. `--dart-define=APP_CHECK_DEBUG_TOKEN` ne configure pas le
+   fournisseur debug.
+4. Le jeton peut changer à la réinstallation de l'app / effacement des données :
    c'est normal, il faut le re-copier.
 
 ## 2. Enregistrer le jeton dans la console Firebase

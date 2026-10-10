@@ -37,10 +37,8 @@ void main() async {
   // Aucun secret n'est commité :
   //   - provider debug → coller le jeton affiché en console dans
   //     Firebase Console > App Check > Enregistrement des appareils (dev),
-  //   - ou passer un jeton CI via --dart-define=APP_CHECK_DEBUG_TOKEN=...
   if (firebaseInitialized) {
     try {
-      const debugToken = String.fromEnvironment('APP_CHECK_DEBUG_TOKEN');
       await FirebaseAppCheck.instance.activate(
         androidProvider: kReleaseMode
             ? AndroidProvider.playIntegrity
@@ -53,8 +51,7 @@ void main() async {
         // Best-effort : journalise le jeton de debug à enregistrer dans
         // la console Firebase (aucune écriture permanente).
         final token = await FirebaseAppCheck.instance.getToken();
-        debugPrint('App Check debug token: $token'
-            '${debugToken.isNotEmpty ? ' (déclaré via --dart-define)' : ''}');
+        debugPrint('App Check debug token: $token');
       }
     } catch (e) {
       // Jamais d'écran blanc à cause d'App Check (réseau, config…).

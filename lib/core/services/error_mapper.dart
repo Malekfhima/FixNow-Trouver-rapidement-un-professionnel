@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fixnow/services/firebase_auth_service.dart'
     show GoogleSignInAbortedException;
-import 'package:fixnow/services/payment_service.dart' show PaymentException;
 import 'package:fixnow/services/storage_service.dart' show StorageException;
 
 /// Single place that converts technical exceptions into clear,
@@ -22,7 +21,6 @@ class ErrorMapper {
       return 'Connexion Google annulée.';
     }
     if (error is StorageException) return error.message;
-    if (error is PaymentException) return error.message;
     if (error is FirebaseAuthException) return _auth(error);
     if (error is FirebaseException) return _firestore(error);
     if (error is TimeoutException) {

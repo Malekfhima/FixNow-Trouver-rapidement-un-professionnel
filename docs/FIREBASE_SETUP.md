@@ -197,7 +197,7 @@ console Firebase → Authentication »).
 | Fournisseur | Étapes | Couvre |
 |---|---|---|
 | **Email/Password** | Sign-in method → Email/Password → *Enable* → *Save* | Inscription, connexion, **mot de passe oublié par email** (lien Firebase) |
-| **Google** | Sign-in method → Google → *Enable* → *Save* | « Continuer avec Google » (création + connexion Gmail). **Prérequis** : empreintes SHA-1/SHA-256 déclarées (§1) puis `google-services.json` re-téléchargé — sinon `DEVELOPER_ERROR` / `oauth_client` vide |
+| **Google** | Sign-in method → Google → *Enable* → *Save* | « Continuer avec Google » (création + connexion Gmail). Android : empreintes SHA-1/SHA-256 déclarées (§1) puis `google-services.json` re-téléchargé. Web : domaine autorisé dans Firebase Authentication (voir §3.3). |
 | **Phone** | Sign-in method → Phone → *Enable* → *Save* | Connexion par SMS, **liaison du numéro à l'inscription**, **mot de passe oublié par SMS** |
 
 ### 3.1 Détails et pièges Phone
@@ -222,3 +222,19 @@ console Firebase → Authentication »).
    « nouveau mot de passe » s'affiche → retour à l'écran de connexion.
 4. Mot de passe oublié → onglet *Email* → le lien de réception arrive.
 
+### 3.3 Google Sign-In sur le Web
+
+Sur Flutter Web, l'application utilise la fenêtre popup de Firebase
+Authentication (`signInWithPopup`) et non le plugin natif `google_sign_in`.
+Ainsi, aucun client ID Google supplémentaire dans une balise `<meta>` de
+`web/index.html` n'est nécessaire.
+
+1. Dans Firebase Console → **Authentication → Settings → Authorized domains**,
+   ajoutez `localhost` pour le développement et le domaine de production lors
+   du déploiement. Saisissez uniquement le nom d'hôte, sans `https://` ni port.
+2. Dans **Authentication → Sign-in method → Google**, vérifiez que Google est
+   activé et qu'un e-mail de support est configuré.
+3. Redémarrez `flutter run -d chrome` après tout changement de configuration.
+
+Les empreintes SHA-1/SHA-256 et `google-services.json` concernent le flux
+Android ; ils ne configurent pas le client Web.

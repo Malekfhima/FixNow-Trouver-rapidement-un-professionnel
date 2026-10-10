@@ -5,6 +5,15 @@ Chaque ligne renvoie au fichier modifié.
 
 ---
 
+## PARTIE 10 — Retrait des profils de démo et des paiements fictifs
+
+| # | Tâche | Correctif | Fichier(s) |
+|---|---|---|---|
+| 1 | **Profils de démo** | Suppression du code d'injection et de l'autorisation Firestore qui permettait à un admin de créer des profils fictifs. L'écran debug ne peut désormais que supprimer les anciens profils connus `demo-pro-*` ; il ne touche pas aux catégories ni aux profils réels | `lib/services/demo_data_cleanup_service.dart`, `lib/features/profile/demo_data_cleanup_screen.dart`, `lib/routing/app_router.dart`, `firestore.rules`, `firestore.rules.test.js` |
+| 2 | **Paiement** | Suppression du faux prestataire et du bouton qui enregistrait un acompte sans transaction. L'écran précise que le paiement en ligne n'est pas disponible ; les anciens champs restent lisibles mais les règles interdisent leur création à l'état payé et leur modification | `lib/features/client_dashboard/order_detail_screen.dart`, `lib/models/service_request_model.dart`, `lib/core/services/error_mapper.dart`, `firestore.rules`, `firestore.rules.test.js`, `test/quality_screens_test.dart` |
+
+---
+
 ## PARTIE 9 — Auth complète : Google, téléphone, mot de passe oublié (email ou SMS)
 
 | # | Tâche | Correctif | Fichier(s) |

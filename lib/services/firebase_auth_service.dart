@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,10 +29,10 @@ final currentUserProvider = Provider<User?>((ref) {
 class FirebaseAuthService {
   FirebaseAuthService({FirebaseAuth? auth, GoogleSignIn? google})
       : _auth = auth ?? FirebaseAuth.instance,
-        _google = google ?? GoogleSignIn();
+        _google = google ?? (kIsWeb ? null : GoogleSignIn());
 
   final FirebaseAuth _auth;
-  final GoogleSignIn _google;
+  final GoogleSignIn? _google;
 
   /// Current signed-in user.
   User? get currentUser => _auth.currentUser;
@@ -70,7 +71,23 @@ class FirebaseAuthService {
   /// `oauth_client` in google-services.json) surfaces as a
   /// [FirebaseAuthException] / [PlatformException] the caller can report.
   Future<UserCredential> signInWithGoogle() async {
-    final GoogleSignInAccount? googleUser = await _google.signIn();
+    if (kIsWeb) {
+      try {
+        return await _auth.signInWithPopup(GoogleAuthProvider());
+      } on FirebaseAuthException catch (error) {
+        if (error.code == 'popup-closed-by-user' ||
+            error.code == 'cancelled-popup-request') {
+          throw const GoogleSignInAbortedException();
+        }
+        rethrow;
+      }
+    }
+
+    final google = _google;
+    if (google == null) {
+      throw StateError('Google Sign-In is unavailable on this platform.');
+    }
+    final GoogleSignInAccount? googleUser = await google.signIn();
     if (googleUser == null) {
       throw const GoogleSignInAbortedException();
     }
@@ -219,7 +236,7 @@ class FirebaseAuthService {
       await _auth.signOut();
     } finally {
       try {
-        await _google.signOut();
+        await _google?.signOut();
       } catch (_) {
         // Google session cleanup is best-effort.
       }

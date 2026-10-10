@@ -28,9 +28,8 @@ class ServiceRequest {
   final double? quotePrice;
   final String? quoteNote;
 
-  /// Acompte réglé (PAIEMENT SIMULÉ, `FakePaymentService`) — écrit par le
-  /// client après acceptation du devis. Les règles Firestore exigent que
-  /// `depositPaid` et `depositId` soient écrits ensemble (bool + string).
+  /// Legacy payment fields kept readable for existing Firestore documents.
+  /// The app has no payment provider and does not write these fields.
   final bool depositPaid;
   final String? depositId;
   final String address;

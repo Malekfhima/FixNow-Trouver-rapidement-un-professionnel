@@ -166,8 +166,8 @@ class ProfileScreen extends ConsumerWidget {
             if (kDebugMode)
               _MenuItem(
                 icon: Icons.science_outlined,
-                label: 'Seed démo (debug)',
-                onTap: () => context.push('/debug-seed'),
+                label: 'Nettoyage démo (debug)',
+                onTap: () => context.push('/debug-cleanup'),
               ),
 
             const SizedBox(height: AppSpacing.xxl),

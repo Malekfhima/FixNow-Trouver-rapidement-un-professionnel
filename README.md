@@ -2,7 +2,7 @@
 
 Application mobile de mise en relation entre **clients** et **professionnels de services**
 (plombier, électricien, menuisier, mécanicien, etc.) : recherche rapide, demande de service,
-devis, suivi de réservation, acompte (paiement simulé), messagerie et avis.
+devis, suivi des demandes, messagerie et avis.
 
 > ✅ **Version finale 1.0.0+1** — toutes les fonctionnalités de la [Roadmap](#-roadmap) sont livrées.
 > Historique détaillé des 8 parties de développement : [`CHANGELOG.md`](CHANGELOG.md) ·
@@ -22,9 +22,9 @@ devis, suivi de réservation, acompte (paiement simulé), messagerie et avis.
 | Authentification | Firebase Auth — email/mot de passe, Google Sign-In, téléphone (SMS, désactivable) |
 | Stockage fichiers | **Cloudinary** (upload *unsigned* + preset) — Firebase Storage retiré (Blaze requis) |
 | Notifications | In-app (Firestore) + locales (`flutter_local_notifications`, payload JSON) ; token FCM conservé pour une migration Functions |
-| Paiement | Interface `PaymentService` + `FakePaymentService` — **acompte 30 % simulé**, aucun prestataire |
-| Sécurité | Règles Firestore par rôle (`client` / `pro` / `admin`) + **76 tests d'émulateur** |
-| CI | GitHub Actions : `flutter analyze` + `flutter test` (77 tests), puis `npm run test:rules` (Node 20 + Java 17) |
+| Paiement | Aucun paiement en ligne intégré ; le règlement se fait directement entre client et professionnel |
+| Sécurité | Règles Firestore par rôle (`client` / `pro` / `admin`) + **222 tests d'émulateur** |
+| CI | GitHub Actions : `flutter analyze` + `flutter test` (78 tests), puis `npm run test:rules` (Node 20 + Java 17) |
 
 ---
 
@@ -85,13 +85,24 @@ photos de demande, images de chat) sont donc hébergées sur **Cloudinary**
    - c'est un preset public par nature : ne jamais y mettre de secret,
      pas de transformation destructrice, pas de droit d'écriture au-delà
      des images.
-3. Lancer l'app avec les deux variables (jamais en dur dans le code) :
+3. Renseigner le fichier `.env` à la racine, puis lancer
+   l'application depuis la racine du projet :
 
 ```bash
-flutter run \
-  --dart-define=CLOUDINARY_CLOUD_NAME=votre-cloud \
-  --dart-define=CLOUDINARY_UPLOAD_PRESET=votre-preset
+flutter run --dart-define-from-file=.env
 ```
+
+Le fichier `.env` doit contenir les deux clés au format `KEY=value` (les
+valeurs ci-dessous sont des exemples) :
+
+```dotenv
+CLOUDINARY_CLOUD_NAME=votre-cloud
+CLOUDINARY_UPLOAD_PRESET=votre-preset
+```
+
+Après avoir modifié `.env`, arrêtez puis relancez l'application avec cette
+commande : les `--dart-define` sont intégrés à la compilation et ne sont pas
+rechargés à chaud.
 
 Gardes client conservées : **5 Mo max**, **images uniquement** ; messages d'erreur
 en français via `ErrorMapper`. Sans ces variables, l'app démarre mais l'upload
@@ -119,7 +130,7 @@ erreur `operation-not-allowed`) :
 | Fournisseur | Sert à | Prérequis |
 |---|---|---|
 | **Email/Password** | Création de compte, connexion, **mot de passe oublié par email** | aucun |
-| **Google** | « Continuer avec Google » (création + connexion Gmail) | SHA-1/SHA-256 §1.3 de [`docs/FIREBASE_SETUP.md`](docs/FIREBASE_SETUP.md) + `google-services.json` à jour |
+| **Google** | « Continuer avec Google » (création + connexion Gmail) | Android : SHA-1/SHA-256 et `google-services.json` à jour. Web : domaine autorisé dans Firebase Auth (détails dans [`docs/FIREBASE_SETUP.md`](docs/FIREBASE_SETUP.md) §3.3) |
 | **Phone** | Connexion par SMS, **liaison du numéro à l'inscription**, **mot de passe oublié par SMS** | quotas SMS, `ENABLE_PHONE_AUTH=true` (défaut) |
 
 L'inscription propose un **champ téléphone optionnel** : après vérification
@@ -189,7 +200,7 @@ dans `.gitignore`) : sans ce fichier, le build retombe sur la clé debug
 2. Accueil → recherche par catégorie / texte → profil professionnel
 3. Réservation : description, adresse, date, budget → demande envoyée
 4. Suivi « Mes commandes » : statuts temps réel, devis reçus (accepter / refuser)
-5. **Acompte** : bouton « Payer l'acompte » après acceptation du devis (*paiement simulé*, écriture `depositPaid` + `depositId` vérifiée par les règles)
+5. **Paiement** : aucun paiement en ligne n'est intégré. Le client convient du règlement directement avec le professionnel.
 6. Messagerie avec le pro, avis après prestation
 
 ### Professionnel
@@ -231,8 +242,7 @@ lib/
 │   ├── notification_service.dart  # FCM (init, tokens en Firestore, routage au tap)
 │   ├── notification_routing.dart  # Table pure notif → route (tap local/FCM + liste)
 │   ├── local_notification_service.dart  # Notifs locales (canal fixnow_default, payload JSON)
-│   ├── payment_service.dart       # Interface PaymentService + FakePaymentService (30 %)
-│   └── seed_service.dart          # Seed de données de démo (DEV)
+│   └── demo_data_cleanup_service.dart # Nettoyage des anciens profils de démo
 └── features/                      # Un dossier par domaine fonctionnel
     ├── auth/                      # Login, inscription, mot de passe oublié, téléphone
     ├── onboarding/
@@ -241,7 +251,7 @@ lib/
     ├── professional_profile/      # Profil public d'un pro + avis
     ├── booking/                   # Demande de service (+ photos)
     ├── chat/                      # Messagerie client ↔ pro
-    ├── client_dashboard/          # Suivi des demandes (« Mes commandes ») + acompte
+    ├── client_dashboard/          # Suivi des demandes (« Mes commandes »)
     ├── pro_dashboard/             # Espace pro : demandes, avis, édition de profil
     ├── notifications/             # Liste des notifications + helpers de création
     ├── review/                    # Saisie d'avis après prestation
@@ -262,8 +272,8 @@ utilisables sont **en français**.
 |---|---|---|
 | `users` | Profil de tout utilisateur (privé) | `role` (client/pro/admin), `isPro`, `name`, `email`, `phone`, `avatarUrl`, `fcmToken` |
 | `publicProfiles` | Identité publique (nom/avatar/rôle affichés) | `name`, `avatarUrl`, `role` — jamais d'email/téléphone/fcmToken |
-| `professionals` | Profil pro (doc id = uid du user ; `demo-*` = seed) | `name`, `city`, `categories[]`, `bio`, `hourlyRate`, `location` (GeoPoint), `gallery[]`, `availability`, `ratingAvg`, `ratingCount`, `status` (pending/approved/rejected) |
-| `serviceRequests` | Demandes de service | `clientId`, `proId`, `categoryId`, `description`, `photos[]`, `address`, `scheduledDate`, `price`, `quotePrice`, `quoteNote`, `depositPaid` (bool), `depositId` (string, écrits **ensemble**), `status` (pending/accepted/declined/quoted/inProgress/completed/cancelled) |
+| `professionals` | Profil pro (doc id = uid du user) | `name`, `city`, `categories[]`, `bio`, `hourlyRate`, `location` (GeoPoint), `gallery[]`, `availability`, `ratingAvg`, `ratingCount`, `status` (pending/approved/rejected) |
+| `serviceRequests` | Demandes de service | `clientId`, `proId`, `categoryId`, `description`, `photos[]`, `address`, `scheduledDate`, `price`, `quotePrice`, `quoteNote`, champs historiques `depositPaid`/`depositId` non modifiables, `status` (pending/accepted/declined/quoted/inProgress/completed/cancelled) |
 | `chats` | Conversations | `clientId`, `proId`, `lastMessage`, `lastMessageAt`, `unreadCount` |
 | `chats/{id}/messages` | Messages d'une conversation | `senderId`, `text`, `imageUrl`, `timestamp`, `read` |
 | `reviews` | Avis après prestation (doc id = `requestId`) | `requestId`, `clientId`, `proId`, `rating` (1–5), `comment` |
@@ -284,11 +294,10 @@ Définies dans [`firestore.rules`](firestore.rules), déployables via
   `ratingAvg`/`ratingCount` (validation et notes gérées ailleurs).
 - **Chats** : lecture/mise à jour/suppression réservées aux **participants** ;
   la création exige d'être l'un des participants, messages immuables.
-- **Demandes** : le client ne peut qu'annuler (+ accepter le devis, écrire
-  l'acompte) ; le pro assigné gère statuts/devis ; l'admin peut tout.
-- **Acompte (paiement simulé)** : `depositPaid` et `depositId` doivent être
-  écrits **ensemble** (bool + string), jamais séparément, et **jamais par le
-  pro** — seule la branche client les autorise.
+- **Demandes** : le client peut annuler ou accepter le devis ; le pro assigné
+  gère les statuts et les devis.
+- **Paiement** : sans prestataire intégré, les champs de paiement historiques
+  ne peuvent pas être définis à la création ni modifiés par un client ou un pro.
 - **Avis** : uniquement le client d'une demande **terminée**, auteur = client de
   la demande, unicité via doc id = `requestId`, immuables.
 - **Notifications** : réservées au destinataire ; seul le destinataire coche
@@ -298,8 +307,7 @@ Définies dans [`firestore.rules`](firestore.rules), déployables via
 - **Identité publique** : `publicProfiles` lisible par tout connecté, champs
   bornés (`name`, `avatarUrl`, `role` uniquement).
 - **Catégories** : écriture admin uniquement.
-- **Seed** : l'admin peut créer des pros de démonstration uniquement avec des ids
-  `demo-*`.
+- **Profils de démonstration** : aucun compte ne peut en créer.
 
 ---
 
@@ -309,32 +317,32 @@ Définies dans [`firestore.rules`](firestore.rules), déployables via
 # Analyse statique (0 erreur attendue)
 flutter analyze
 
-# Tests unitaires et widgets (77 tests)
+# Tests unitaires et widgets (78 tests)
 flutter test
 
-# Tests des règles Firestore — 76 tests sur l'émulateur (Node + Java requis)
+# Tests des règles Firestore — 222 tests sur l'émulateur (Node + Java requis)
 npm run test:rules
 ```
 
-**Flutter — 13 fichiers, 77 tests :**
+**Flutter — 13 fichiers, 78 tests :**
 
 - `test/widget_test.dart` — démarrage de l'app (override d'auth, sans Firebase).
 - `test/critical_screens_test.dart` + `test/quality_screens_test.dart` — écrans
   critiques rendus à **320 dp / scale ×1.5** sans overflow : notifications,
-  détail commande (photos + acompte), Mes avis, recherche, profil…
+  détail commande (photos + information sur le paiement), Mes avis, recherche, profil…
 - `test/notification_payload_test.dart` / `notification_routing_test.dart` —
   aller-retour du payload JSON et table de routage notif → route (client vs pro,
   type inconnu).
 - `test/storage_service_test.dart` — uploads Cloudinary (mock HTTP, `public_id`
   unique, gardes 5 Mo / images).
 - `test/search_pagination_test.dart`, `test/booking_photos_test.dart`,
-  `test/payment_service_test.dart`, `test/service_request_state_machine_test.dart`,
+  `test/service_request_state_machine_test.dart`,
   `test/star_rating_test.dart`, `test/theme_test.dart`, `test/sign_out_test.dart`.
 
-**Règles Firestore — `firestore.rules.test.js`, 76 tests (19 blocs) :**
+**Règles Firestore — `firestore.rules.test.js`, 222 tests :**
 invariants rôle/statut, chats réservés aux participants, machine à états des
-demandes, **acompte (paire indissociable, types, pro exclu)**, avis, notifications
-(lien réel), seed admin, catégories, failles 1→10 corrigées.
+demandes, refus des champs de paiement non vérifiés, avis, notifications
+(lien réel), refus des profils de démonstration, catégories, failles 1→10 corrigées.
 
 - L'émulateur écoute sur le port **8081** (8080 souvent occupé). Sous Windows,
   exporter le JDK si besoin :
@@ -345,18 +353,12 @@ demandes, **acompte (paire indissociable, types, pro exclu)**, avis, notificatio
 
 ---
 
-## 🌱 Données de démonstration (DEV uniquement)
+## 🧹 Anciens profils de démonstration
 
-Un écran de seed, accessible **uniquement en debug** (`kDebugMode`) via
-`Profil → Seed démo (debug)` (route `/debug-seed`), permet de :
-
-- **injecter** 8 catégories + 6 professionnels fictifs (identifiés par le préfixe
-  `[DÉMO]` et une mention dans la bio, statut *approuvé*, tarifs) ;
-- **supprimer** ces données (ids stables → opérations idempotentes).
-
-> ⚠️ Le seed exige un compte **admin** : dans la console Firebase (ou l'émulateur),
-> passe `users/<ton-uid>.role` à `"admin"`. Sans cela, les règles de sécurité
-> refusent l'écriture (message explicatif affiché dans l'écran).
+La création de profils de démo a été retirée. En build debug, un compte admin
+peut utiliser `Profil → Nettoyage démo (debug)` pour supprimer les anciens
+documents `professionals/demo-pro-1` à `demo-pro-6`. Les catégories et les
+profils réels ne sont pas touchés.
 
 ---
 
@@ -364,17 +366,17 @@ Un écran de seed, accessible **uniquement en debug** (`kDebugMode`) via
 
 ### P0 – Socle ✅
 - [x] Réparation des fichiers cassés (profil pro, recherche, routeur) — `flutter analyze` sans erreur
-- [x] Durcissement des règles Firestore (rôle/statut invariants, chats aux participants) + **76 tests émulateur**
+- [x] Durcissement des règles Firestore (rôle/statut invariants, chats aux participants) + **222 tests émulateur**
 - [x] Redirection d'auth par rôle (routes protégées client/pro/admin) + mot de passe oublié
 - [x] Flux professionnel : inscription pro, édition de profil, « Mes demandes » (accepter/refuser/devis/démarrer/terminer)
-- [x] Seed de démonstration (catégories + pros `[DÉMO]`, bouton debug uniquement)
+- [x] Profils de démonstration retirés ; outil debug limité au nettoyage des anciens profils
 
 ### P1 – Cœur métier ✅
 - [x] Avis : notation après prestation terminée (batch avis + compteurs, « Mes avis » côté pro)
 - [x] Notifications in-app + locales (`flutter_local_notifications`, payload JSON, routage par type)
 - [x] Upload de photos : Cloudinary (avatars, galerie pro, photos de demande, images de chat)
 - [x] Recherche avancée : tri, filtres note/prix/disponibilité, pagination (50 par page, curseur `startAfterDocument`)
-- [x] Paiement / acompte derrière une interface `PaymentService` (implémentation simulée `FakePaymentService`, bouton d'acompte branché, sans frais)
+- [x] Paiement en ligne laissé indisponible jusqu'à l'intégration d'un prestataire réel
 
 ### P2 – Administration & options ✅
 - [x] Tableau de bord admin (validation des pros, modération, statistiques)
@@ -384,7 +386,7 @@ Un écran de seed, accessible **uniquement en debug** (`kDebugMode`) via
 - [x] Payload de notification en JSON (plus de `substring` sur une map Dart)
 - [x] Table de routage notif → route partagée (tap FCM/local + liste in-app)
 - [x] `public_id` Cloudinary unique par upload (uuid)
-- [x] Acompte simulé branché (UI + règles + tests émulateur)
+- [x] Écritures de paiements simulés bloquées par les règles Firestore
 - [x] Widget tests 320 dp ×1.5 (notifications, détail commande, Mes avis)
 - [x] Nettoyage `firebase.json` + CI : job `firestore-rules`
 

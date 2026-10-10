@@ -61,16 +61,17 @@ Identifiant application harmonisé sur **toutes les plateformes** :
 - job `flutter` : `flutter analyze` + `flutter test` sur `ubuntu-latest`
   (Flutter 3.44.9 stable) ;
 - job `firestore-rules` : Node 20 + Java 17 + `npm ci` + `npm run test:rules`
-  sur l'émulateur Firestore (tests des règles, dont les champs d'acompte) —
+  sur l'émulateur Firestore (notamment le refus des champs de paiement non vérifiés) —
   Java n'étant pas disponible en local, ce job est le seul endroit où ces
   tests s'exécutent ;
 - déclenché sur push `main`/`develop` et PR, annulation des runs obsolètes.
 
 ### 1.6 Vérifications locales effectuées
 - `flutter analyze` → **0 problème**.
-- `flutter test` → **77/77 réussis** (dont les 9 tests d'écrans à 320 dp /
+- `flutter test` → **78/78 réussis** (dont les 9 tests d'écrans à 320 dp /
   ×1.5 de `quality_screens_test.dart`, les 8 tests de routage de
   notification, les 5 aller-retours de payload JSON et les 8 tests Storage).
+- `npm run test:rules` → **222/222 réussis** sur l'émulateur Firestore.
 
 ---
 
@@ -127,9 +128,9 @@ Identifiant application harmonisé sur **toutes les plateformes** :
       (nécessite le **plan Blaze** — décision budget à confirmer).
 - [ ] **Index Firestore** : `firebase deploy --only firestore:indexes`
       puis vérifier l'absence d'index manquants dans la console.
-- [ ] **App Check** : enregistrer le jeton debug
-      (`--dart-define=APP_CHECK_DEBUG_TOKEN`) dans Console → App Check →
-      débogueurs, puis activer l'enforcement **Play Integrity**.
+- [ ] **App Check** : récupérer le jeton debug affiché dans les logs de
+      l'application, l'enregistrer dans Console → App Check → débogueurs,
+      puis activer l'enforcement **Play Integrity** après vérification.
 
 ### Actions sur les données existantes (outils fournis)
 - [ ] **Backfill `publicProfiles`** pour les comptes créés avant la faille 7 :

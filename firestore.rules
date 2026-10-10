@@ -98,20 +98,42 @@ service cloud.firestore {
 
       // 1) CRÉATION : un pro ouvre toujours son profil en 'pending' avec
       //    des notes à zéro → il ne peut JAMAIS s'auto-approuver.
-      //    L'admin conserve la création de ses démos (ids demo-*).
+      //    Aucun compte ne peut créer un profil de démonstration.
       allow create: if (
           isOwner(proId) && isPro()
           && request.resource.data.status == 'pending'
           && request.resource.data.get('ratingAvg', 0) == 0
           && request.resource.data.get('ratingCount', 0) == 0
           && request.resource.data.get('lastRatingReviewId', '') == ''
-        ) || (isAdmin() && proId.matches('demo-.*'));
-
-      // 2) Le pro modifie son profil — jamais son statut ni ses notes.
-      allow update: if isOwner(proId) && isPro()
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(
-          ['status', 'ratingAvg', 'ratingCount', 'lastRatingReviewId']
         );
+
+      // 2) Le pro ne peut modifier que les champs du formulaire de profil.
+      //    Les notes, le statut et les champs d'identité restent protégés.
+      allow update: if isOwner(proId) && isPro()
+        && validProfessionalProfileUpdate();
+
+      function validProfessionalProfileUpdate() {
+        let changed = request.resource.data.diff(resource.data).affectedKeys();
+        let data = request.resource.data;
+        return changed.hasOnly([
+            'categories', 'bio', 'city', 'hourlyRate', 'availability', 'gallery'
+          ])
+          && data.get('categories', []) is list
+          && data.get('categories', []).size() <= 10
+          && data.get('bio', '') is string
+          && data.get('bio', '').size() <= 2000
+          && data.get('city', '') is string
+          && data.get('city', '').size() <= 200
+          && data.get('hourlyRate', 0) is number
+          && data.get('hourlyRate', 0) >= 0
+          && data.get('hourlyRate', 0) <= 100000
+          && data.get('gallery', []) is list
+          && data.get('gallery', []).size() <= 20
+          && data.get('availability', {}) is map
+          && data.get('availability', {}).keys().hasOnly(['days'])
+          && data.get('availability', {}).get('days', []) is list
+          && data.get('availability', {}).get('days', []).size() <= 7;
+      }
 
       // 3) COMpteurs de notes (sans Cloud Functions) :
       //    autorisés UNIQUEMENT dans le même batch/transaction que la
@@ -195,6 +217,8 @@ service cloud.firestore {
         && request.resource.data.get('quotePrice', null) == null
         && request.resource.data.get('quoteNote', null) == null
         && request.resource.data.get('price', null) == null
+        && request.resource.data.get('depositPaid', false) == false
+        && request.resource.data.get('depositId', null) == null
         && get(/databases/$(database)/documents/professionals/$(request.resource.data.proId)).data.status == 'approved';
 
       // ── Machine à états (miroir exact de
@@ -219,24 +243,12 @@ service cloud.firestore {
       function toStatus() { return request.resource.data.status; }
       function statusUnchanged() { return toStatus() == fromStatus(); }
 
-      // Le client ne modifie que : status, description, photos, address,
-      // scheduledDate, depositPaid + depositId (paiement SIMULÉ de l'acompte)
-      // (+ updatedAt, horodatage technique).
+      // Le client ne modifie que ses champs métier. Les champs de paiement
+      // historiques ne peuvent être écrits sans prestataire de paiement.
       function clientKeysOk() {
         return touchedKeys().hasOnly(
-          ['status', 'description', 'photos', 'address', 'scheduledDate',
-           'depositPaid', 'depositId', 'updatedAt']
+          ['status', 'description', 'photos', 'address', 'scheduledDate', 'updatedAt']
         );
-      }
-
-      // Acompte (paiement simulé) : les deux champs sont écrits ENSEMBLE par
-      // le client, avec les bons types (bool + string). Jamais touchés par
-      // le pro — depositKeysOk ne s'applique qu'à la branche client.
-      function depositKeysOk() {
-        return !touchedKeys().hasAny(['depositPaid', 'depositId'])
-          || (touchedKeys().hasAll(['depositPaid', 'depositId'])
-              && request.resource.data.depositPaid is bool
-              && request.resource.data.depositId is string);
       }
 
       // Le pro ne modifie que : status, quotePrice, quoteNote, price.
@@ -267,7 +279,6 @@ service cloud.firestore {
         && (
           (resource.data.clientId == request.auth.uid
             && clientKeysOk()
-            && depositKeysOk()
             && clientTransitionOk())
           || (resource.data.proId == request.auth.uid
             && proKeysOk()

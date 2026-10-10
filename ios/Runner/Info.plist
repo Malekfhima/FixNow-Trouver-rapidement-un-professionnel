@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Fixnow a besoin de l’accès à la caméra pour prendre des photos à joindre à vos demandes.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Fixnow utilise votre position lorsque l’application est ouverte pour les fonctionnalités de géolocalisation.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

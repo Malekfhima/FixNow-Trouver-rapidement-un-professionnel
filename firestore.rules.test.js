@@ -34,7 +34,12 @@ beforeEach(async () => {
 
 /** Creates an authenticated Firestore client for the given uid/role. */
 function authedDb(uid, role) {
-  return env.authenticatedContext(uid, { role }).firestore();
+  // Migration vers les custom claims terminée : `isAdmin()` lit
+  // request.auth.token.admin (plus users/{uid}.role). Le helper reproduit
+  // donc le jeton réellement porté par un compte admin en production
+  // (posé par tool/set_custom_claims.js).
+  const token = role === 'admin' ? { role, admin: true } : { role };
+  return env.authenticatedContext(uid, token).firestore();
 }
 
 /** Seeds a user profile document (bypasses rules — test setup only). */
@@ -170,6 +175,41 @@ describe('professionals : statut invariant', () => {
     );
   });
 
+  test("un pro peut enregistrer tous les champs du formulaire de profil", async () => {
+    await seedUser('p13', 'pro');
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'professionals', 'p13'), {
+        categories: ['Plomberie'],
+        bio: 'Pro de test',
+        city: 'Paris',
+        hourlyRate: 40,
+        availability: { days: ['Lundi'] },
+        gallery: [],
+        status: 'approved',
+        ratingAvg: 0,
+        ratingCount: 0,
+      });
+    });
+
+    const db = authedDb('p13', 'pro');
+    await assertSucceeds(
+      setDoc(doc(db, 'professionals', 'p13'), {
+        categories: ['Plomberie', 'Électricité'],
+        bio: 'Interventions à domicile',
+        city: 'Lyon',
+        hourlyRate: 55,
+        availability: { days: ['Lundi', 'Samedi'] },
+        gallery: ['https://images.example/photo.jpg'],
+      }, { merge: true })
+    );
+    await assertFails(
+      setDoc(doc(db, 'professionals', 'p13'), { hourlyRate: 100001 }, { merge: true })
+    );
+    await assertFails(
+      setDoc(doc(db, 'professionals', 'p13'), { status: 'rejected' }, { merge: true })
+    );
+  });
+
   test("un admin peut valider un pro (status -> approved)", async () => {
     await seedUser('p4', 'pro');
     await seedUser('admin2', 'admin');
@@ -185,19 +225,12 @@ describe('professionals : statut invariant', () => {
     );
   });
 
-  test("seed : un admin peut créer des pros de démo (ids demo-*), pas d'autres", async () => {
+  test("un admin ne peut pas créer de faux profil professionnel", async () => {
     await seedUser('admin4', 'admin');
     const db = authedDb('admin4', 'admin');
-    await assertSucceeds(
+    await assertFails(
       setDoc(doc(db, 'professionals', 'demo-pro-1'), {
         name: '[DÉMO] Pro fictif',
-        categories: ['Plomberie'],
-        status: 'approved',
-      })
-    );
-    await assertFails(
-      setDoc(doc(db, 'professionals', 'vrai-pro'), {
-        name: 'Pas une démo',
         categories: ['Plomberie'],
         status: 'approved',
       })
@@ -443,8 +476,9 @@ describe('serviceRequests : machine à états stricte', () => {
         { merge: true })
     );
   });
+});
 
-  describe('serviceRequests : acompte — paiement simulé (depositPaid + depositId)', () => {
+  describe('serviceRequests : paiements indisponibles sans prestataire', () => {
     async function seedAccepted(id, clientId, proId) {
       await env.withSecurityRulesDisabled(async (ctx) => {
         await setDoc(doc(ctx.firestore(), 'serviceRequests', id), {
@@ -458,20 +492,20 @@ describe('serviceRequests : machine à états stricte', () => {
       });
     }
 
-    test('le client enregistre l\'acompte (les 2 champs ENSEMBLE, bons types)', async () => {
+    test('le client ne peut pas marquer un acompte comme payé', async () => {
       await seedUser('cDep', 'client');
       await seedUser('pDep', 'pro');
       await seedAccepted('dp1', 'cDep', 'pDep');
       const client = authedDb('cDep', 'client');
 
-      await assertSucceeds(
+      await assertFails(
         setDoc(doc(client, 'serviceRequests', 'dp1'),
-          { depositPaid: true, depositId: 'fake_dep_dp1' },
+          { depositPaid: true, depositId: 'unverified-transaction' },
           { merge: true })
       );
     });
 
-    test('un seul des deux champs : refusé (paire indissociable)', async () => {
+    test('le client ne peut modifier aucun champ de paiement historique', async () => {
       await seedUser('cDep2', 'client');
       await seedUser('pDep2', 'pro');
       await seedAccepted('dp2', 'cDep2', 'pDep2');
@@ -479,43 +513,25 @@ describe('serviceRequests : machine à états stricte', () => {
 
       await assertFails(
         setDoc(doc(client, 'serviceRequests', 'dp2'),
-          { depositPaid: true },
+          { depositPaid: false },
           { merge: true })
       );
       await assertFails(
         setDoc(doc(client, 'serviceRequests', 'dp2'),
-          { depositId: 'fake_dep_dp2' },
-          { merge: true })
-      );
-    });
-
-    test('types invalides : refusés', async () => {
-      await seedUser('cDep3', 'client');
-      await seedUser('pDep3', 'pro');
-      await seedAccepted('dp3', 'cDep3', 'pDep3');
-      const client = authedDb('cDep3', 'client');
-
-      await assertFails(
-        setDoc(doc(client, 'serviceRequests', 'dp3'),
-          { depositPaid: 'oui', depositId: 'fake_dep_dp3' },
-          { merge: true })
-      );
-      await assertFails(
-        setDoc(doc(client, 'serviceRequests', 'dp3'),
-          { depositPaid: true, depositId: 42 },
+          { depositId: null },
           { merge: true })
       );
     });
 
     test('le pro ne touche JAMAIS aux champs d\'acompte', async () => {
-      await seedUser('cDep4', 'client');
-      await seedUser('pDep4', 'pro');
-      await seedAccepted('dp4', 'cDep4', 'pDep4');
-      const pro = authedDb('pDep4', 'pro');
+      await seedUser('cDep3', 'client');
+      await seedUser('pDep3', 'pro');
+      await seedAccepted('dp3', 'cDep3', 'pDep3');
+      const pro = authedDb('pDep3', 'pro');
 
       await assertFails(
-        setDoc(doc(pro, 'serviceRequests', 'dp4'),
-          { depositPaid: true, depositId: 'fake_dep_dp4' },
+        setDoc(doc(pro, 'serviceRequests', 'dp3'),
+          { depositPaid: true, depositId: 'unverified-transaction' },
           { merge: true })
       );
     });
@@ -927,6 +943,17 @@ describe('faille 2 : serviceRequests création verrouillée', () => {
     );
     await assertFails(
       setDoc(doc(db, 'serviceRequests', 'sr-price'), { ...VALID, price: 99 })
+    );
+  });
+
+  test('une demande ne peut pas être créée comme déjà payée', async () => {
+    const db = authedDb('cNew', 'client');
+    await assertFails(
+      setDoc(doc(db, 'serviceRequests', 'sr-fake-payment'), {
+        ...VALID,
+        depositPaid: true,
+        depositId: 'unverified-transaction',
+      })
     );
   });
 
@@ -1363,7 +1390,9 @@ describe('faille 10 : rôles — migration vers les custom claims', () => {
       });
     });
 
-    const db = authedDb('legacyAdmin', 'admin');
+    // Jeton SANS le custom claim (rôle legacy uniquement) : c'est tout
+    // l'objet de ce test, on ne passe donc pas par authedDb().
+    const db = env.authenticatedContext('legacyAdmin', { role: 'admin' }).firestore();
 
     // Ne peut PAS approuver un pro…
     await assertFails(

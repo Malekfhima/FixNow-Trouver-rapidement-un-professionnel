@@ -35,8 +35,7 @@ class _FakeFirestoreService extends FirestoreService {
   final bool failReviews;
   final AppUser? publicProfile;
 
-  /// Appels d'écriture enregistrés (id → données) pour vérifier le
-  /// branchement du paiement simulé.
+  /// Appels d'écriture enregistrés afin de vérifier l'absence de faux paiement.
   final Map<String, Map<String, dynamic>> updatedRequests = {};
 
   @override
@@ -104,14 +103,18 @@ ServiceRequest _request({bool depositPaid = false}) {
     status: ServiceRequestStatus.accepted,
     price: 100,
     depositPaid: depositPaid,
-    depositId: depositPaid ? 'fake_dep_r1' : null,
+    depositId: depositPaid ? 'legacy-transaction' : null,
     address: '12 rue des Lilas, Paris',
     createdAt: DateTime(2026, 1, 1),
     updatedAt: DateTime(2026, 1, 1),
   );
 }
 
-Review _review({String id = 'rev1', int rating = 5, String clientId = 'c1', String comment = 'Travail impeccable et rapide.'}) {
+Review _review(
+    {String id = 'rev1',
+    int rating = 5,
+    String clientId = 'c1',
+    String comment = 'Travail impeccable et rapide.'}) {
   return Review(
     id: id,
     requestId: 'r1',
@@ -141,7 +144,8 @@ Future<void> _setSmallPhone(WidgetTester tester) async {
   addTearDown(tester.view.reset);
 }
 
-Widget _wrap(Widget home, FirestoreService fake, {User? user, double scale = 1}) {
+Widget _wrap(Widget home, FirestoreService fake,
+    {User? user, double scale = 1}) {
   return ProviderScope(
     overrides: [
       firestoreServiceProvider.overrideWithValue(fake),
@@ -169,8 +173,8 @@ void main() {
       await _setSmallPhone(tester);
       final fake = _FakeFirestoreService();
 
-      await tester.pumpWidget(_wrap(const NotificationsScreen(), fake,
-          user: user, scale: 1.5));
+      await tester.pumpWidget(
+          _wrap(const NotificationsScreen(), fake, user: user, scale: 1.5));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
@@ -184,11 +188,14 @@ void main() {
         (tester) async {
       await _setSmallPhone(tester);
       final fake = _FakeFirestoreService(
-        notifications: [_notif(), _notif(id: 'n2', type: NotificationType.newMessage, read: true)],
+        notifications: [
+          _notif(),
+          _notif(id: 'n2', type: NotificationType.newMessage, read: true)
+        ],
       );
 
-      await tester.pumpWidget(_wrap(const NotificationsScreen(), fake,
-          user: user, scale: 1.5));
+      await tester.pumpWidget(
+          _wrap(const NotificationsScreen(), fake, user: user, scale: 1.5));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
@@ -201,8 +208,8 @@ void main() {
       await _setSmallPhone(tester);
       final fake = _FakeFirestoreService(failNotifications: true);
 
-      await tester.pumpWidget(_wrap(const NotificationsScreen(), fake,
-          user: user));
+      await tester
+          .pumpWidget(_wrap(const NotificationsScreen(), fake, user: user));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
@@ -211,9 +218,9 @@ void main() {
     });
   });
 
-  group('T5 — Détail commande (photos + paiement simulé)', () {
+  group('T5 — Détail commande (photos + paiement indisponible)', () {
     testWidgets(
-        'devis accepté non payé : galerie photos + bouton acompte, tap → depositPaid enregistré',
+        'devis accepté : explique que le paiement en ligne est indisponible',
         (tester) async {
       await _setSmallPhone(tester);
       final fake = _FakeFirestoreService(request: _request());
@@ -227,21 +234,16 @@ void main() {
       // Galerie photos : une image réseau affichée pour la photo de la demande.
       expect(find.byType(CachedNetworkImage), findsOneWidget);
 
-      // Bouton acompte clairement étiqueté « Paiement simulé ».
-      expect(find.textContaining('Paiement simulé'), findsOneWidget);
-
-      // Tap → 600 ms de latence simulée → écriture Firestore des 2 champs.
-      await tester.tap(find.byType(FilledButton));
-      await tester.pump(const Duration(milliseconds: 700));
-
-      final written = fake.updatedRequests['r1'];
-      expect(written, isNotNull, reason: 'la demande est mise à jour');
-      expect(written!['depositPaid'], true);
-      expect(written['depositId'], 'fake_dep_r1');
+      expect(
+        find.textContaining('Le paiement en ligne n’est pas disponible.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Payer l'), findsNothing);
+      expect(fake.updatedRequests, isEmpty);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('acompte déjà payé : bandeau de confirmation, pas de bouton',
+    testWidgets('un ancien indicateur de paiement ne confirme aucun paiement',
         (tester) async {
       await _setSmallPhone(tester);
       final fake = _FakeFirestoreService(request: _request(depositPaid: true));
@@ -251,8 +253,13 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
-      expect(find.text('Acompte réglé · Paiement simulé'), findsOneWidget);
+      expect(
+        find.textContaining('Le paiement en ligne n’est pas disponible.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Acompte réglé'), findsNothing);
       expect(find.textContaining('Payer l'), findsNothing);
+      expect(fake.updatedRequests, isEmpty);
       expect(tester.takeException(), isNull);
     });
 
@@ -275,8 +282,8 @@ void main() {
       await _setSmallPhone(tester);
       final fake = _FakeFirestoreService();
 
-      await tester.pumpWidget(_wrap(const ProReviewsScreen(), fake,
-          user: user, scale: 1.5));
+      await tester.pumpWidget(
+          _wrap(const ProReviewsScreen(), fake, user: user, scale: 1.5));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
@@ -295,8 +302,8 @@ void main() {
         publicProfile: _profile(),
       );
 
-      await tester.pumpWidget(_wrap(const ProReviewsScreen(), fake,
-          user: user, scale: 1.5));
+      await tester.pumpWidget(
+          _wrap(const ProReviewsScreen(), fake, user: user, scale: 1.5));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
       await tester.pump(const Duration(milliseconds: 50));
@@ -315,8 +322,8 @@ void main() {
       await _setSmallPhone(tester);
       final fake = _FakeFirestoreService(failReviews: true);
 
-      await tester.pumpWidget(_wrap(const ProReviewsScreen(), fake,
-          user: user));
+      await tester
+          .pumpWidget(_wrap(const ProReviewsScreen(), fake, user: user));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
