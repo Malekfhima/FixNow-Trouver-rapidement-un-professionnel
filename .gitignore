@@ -53,4 +53,5 @@ tool/serviceAccount*.json
 **/serviceAccount*.json
 .env
 .env.*
+!.env.example
 app_check_debug_token.txt

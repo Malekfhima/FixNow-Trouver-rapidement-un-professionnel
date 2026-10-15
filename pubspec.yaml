@@ -47,6 +47,10 @@ dependencies:
   # Réseau (upload Cloudinary)
   http: ^1.2.2
 
+  # Carte interactive (OpenStreetMap, sans clé API)
+  flutter_map: ^8.0.0
+  latlong2: ^0.9.0
+
   # Utils
   uuid: ^4.3.3
   timeago: ^3.6.1

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fixnow/models/user_model.dart';
+import 'package:fixnow/models/address_model.dart';
 import 'package:fixnow/models/professional_model.dart';
 import 'package:fixnow/models/service_request_model.dart';
 import 'package:fixnow/models/category_model.dart';
@@ -118,6 +119,19 @@ class FirestoreService {
     if (!doc.exists) {
       await createUser(user);
     }
+  }
+
+  // ── Saved addresses (users/{uid}.addresses) ─────────────────────
+
+  /// Replaces the whole addresses list of the user. The Firestore rules
+  /// already restrict `users/{uid}` updates to the owner (role/isPro
+  /// excluded), so writing this private array needs no extra rules.
+  Future<void> updateAddresses(String uid, List<Address> addresses) async {
+    await _userDoc(uid).update(
+      {
+        'addresses': addresses.map((a) => a.toMap()).toList(),
+      },
+    );
   }
 
   // ── Professionals ────────────────────────────────────────────────

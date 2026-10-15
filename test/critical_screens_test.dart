@@ -210,8 +210,13 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
       await tester.pump(const Duration(milliseconds: 50));
 
-      expect(find.text('Rechercher'), findsOneWidget, reason: 'titre AppBar');
-      expect(find.text('Plomberie'), findsWidgets, reason: 'onglet catégorie');
+      // UI v2 : AppBar remplacée par la SearchBar M3 avec bouton retour.
+      expect(find.byTooltip('Retour'), findsOneWidget,
+          reason: 'bouton retour de la SearchBar');
+      expect(find.textContaining('Plomberie, fuite d\'eau'), findsOneWidget,
+          reason: 'hint enrichi de la SearchBar');
+      expect(find.textContaining('Plomberie'), findsWidgets,
+          reason: 'chips de catégories');
       expect(find.text('Alice Martin'), findsOneWidget,
           reason: 'résultat de recherche affiché');
       expect(find.byTooltip('Effacer la recherche'), findsNothing,

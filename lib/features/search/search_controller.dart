@@ -9,6 +9,10 @@ enum SearchSort { rating, priceAsc, priceDesc }
 
 /// State for the Search screen.
 class SearchState {
+  /// Pros des pages Firestore chargées (non filtrés) — source des
+  /// compteurs de catégories affichés sur les FilterChips.
+  final List<Professional> allResults;
+
   final List<Professional> results;
   final bool isLoading;
 
@@ -27,7 +31,18 @@ class SearchState {
   /// True when only pros with a non-empty availability are shown.
   final bool availableOnly;
 
+  /// Filtre rapide « Agréé Assurances » : aucun champ `insuranceAgreement`
+  /// n'existe encore dans Firestore — proxy documenté côté client :
+  /// pros bien notés (≥ 4.5 avec ≥ 10 avis). À brancher sur un vrai
+  /// champ dès que le backend le fournit.
+  final bool insuredOnly;
+
+  /// Rayon de recherche en km (filtre client-side, actif uniquement
+  /// quand une position utilisateur est connue).
+  final double? radiusKm;
+
   const SearchState({
+    this.allResults = const [],
     this.results = const [],
     this.isLoading = false,
     this.isLoadingMore = false,
@@ -39,9 +54,12 @@ class SearchState {
     this.minRating = 0,
     this.sort = SearchSort.rating,
     this.availableOnly = false,
+    this.insuredOnly = false,
+    this.radiusKm,
   });
 
   SearchState copyWith({
+    List<Professional>? allResults,
     List<Professional>? results,
     bool? isLoading,
     bool? isLoadingMore,
@@ -54,8 +72,12 @@ class SearchState {
     double? minRating,
     SearchSort? sort,
     bool? availableOnly,
+    bool? insuredOnly,
+    double? radiusKm,
+    bool clearRadius = false,
   }) {
     return SearchState(
+      allResults: allResults ?? this.allResults,
       results: results ?? this.results,
       isLoading: isLoading ?? this.isLoading,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
@@ -67,7 +89,20 @@ class SearchState {
       minRating: minRating ?? this.minRating,
       sort: sort ?? this.sort,
       availableOnly: availableOnly ?? this.availableOnly,
+      insuredOnly: insuredOnly ?? this.insuredOnly,
+      radiusKm: clearRadius ? null : (radiusKm ?? this.radiusKm),
     );
+  }
+
+  /// Nombre de filtres actifs (badge du bouton « Filtres »).
+  int get activeFilterCount {
+    var count = 0;
+    if (maxPrice != null) count++;
+    if (minRating > 0) count++;
+    if (availableOnly) count++;
+    if (insuredOnly) count++;
+    if (radiusKm != null) count++;
+    return count;
   }
 }
 
@@ -85,6 +120,10 @@ class SearchController extends StateNotifier<SearchState> {
   GeoPoint? _userLocation;
 
   SearchController(this._firestoreService) : super(const SearchState());
+
+  /// Position utilisateur (null tant que « Autour de moi » n'a pas été
+  /// activé ou n'a pas réussi).
+  GeoPoint? get userLocation => _userLocation;
 
   /// [userLocation] enables sorting by distance (Haversine) when provided.
   Future<void> search({
@@ -126,11 +165,11 @@ class SearchController extends StateNotifier<SearchState> {
 
       _lastDocument = page.lastDocument;
 
-      final combined =
-          reset ? page.items : [...state.results, ...page.items];
-      final processed = _filterAndSort(combined);
+      final rawAll = reset ? page.items : [...state.allResults, ...page.items];
+      final processed = _filterAndSort(rawAll);
 
       state = state.copyWith(
+        allResults: rawAll,
         results: processed,
         isLoading: false,
         isLoadingMore: false,
@@ -165,6 +204,13 @@ class SearchController extends StateNotifier<SearchState> {
         // Filtre « disponible » : le pro a déclaré au moins un jour
         // d'ouverture (availability['days'] non vide).
         .where((p) => !state.availableOnly || _hasAvailability(p))
+        // Filtre « Agréé assurances » : proxy (voir SearchState.insuredOnly).
+        .where((p) => !state.insuredOnly || _looksInsured(p))
+        // Filtre « rayon » : uniquement si une position est connue.
+        .where((p) =>
+            state.radiusKm == null ||
+            _userLocation == null ||
+            (distanceKmTo(p) ?? double.infinity) <= state.radiusKm!)
         .toList();
 
     final location = _userLocation;
@@ -193,12 +239,20 @@ class SearchController extends StateNotifier<SearchState> {
     return days is List && days.isNotEmpty;
   }
 
+  /// Proxy « agréé assurances » tant que le champ dédié n'existe pas :
+  /// pros bien établis (note ≥ 4.5 sur ≥ 10 avis).
+  static bool _looksInsured(Professional pro) =>
+      pro.ratingAvg >= 4.5 && pro.ratingCount >= 10;
+
   /// Applies filters/sort without refetching (client-side, instant).
   void applyFilters({
     double? maxPrice,
     double? minRating,
     SearchSort? sort,
     bool? availableOnly,
+    bool? insuredOnly,
+    double? radiusKm,
+    bool clearRadius = false,
   }) {
     state = state.copyWith(
       maxPrice: maxPrice,
@@ -206,6 +260,8 @@ class SearchController extends StateNotifier<SearchState> {
       minRating: minRating ?? state.minRating,
       sort: sort ?? state.sort,
       availableOnly: availableOnly ?? state.availableOnly,
+      insuredOnly: insuredOnly ?? state.insuredOnly,
+      radiusKm: clearRadius ? null : (radiusKm ?? state.radiusKm),
     );
     // Re-run search but keep the last query/category/location.
     search(
@@ -215,27 +271,62 @@ class SearchController extends StateNotifier<SearchState> {
     );
   }
 
+  /// Compteurs de catégories à partir des pages Firestore chargées :
+  /// « Tous » = total chargé, chaque catégorie = nb de pros la déclarant.
+  Map<String, int> categoryCounts(Iterable<String> categories) {
+    final counts = <String, int>{};
+    for (final category in categories) {
+      if (category == 'Tous') {
+        counts[category] = state.allResults.length;
+        continue;
+      }
+      counts[category] = state.allResults
+          .where((p) => p.categories.contains(category))
+          .length;
+    }
+    return counts;
+  }
+
+  /// Distance en km jusqu'au pro (null si pas de position ou de lieu pro).
+  double? distanceKmTo(Professional pro) {
+    final location = _userLocation;
+    final proLocation = pro.location;
+    if (location == null || proLocation == null) return null;
+    return _haversineKm(location, proLocation);
+  }
+
+  /// Temps d'arrivée estimé (minutes) — heuristique documentée :
+  /// 8 min de préparation + 4 min par km, bornée à 60.
+  int? etaMinutesFor(Professional pro) {
+    final km = distanceKmTo(pro);
+    if (km == null) return null;
+    return (8 + 4 * km).round().clamp(5, 60);
+  }
+
   /// Sorts pros by great-circle distance (Haversine) to the user's position.
   List<Professional> _sortByDistance(
     List<Professional> pros,
     GeoPoint userLocation,
   ) {
-    double distanceKm(Professional pro) {
-      final loc = pro.location;
-      if (loc == null) return double.infinity;
-      const r = 6371.0; // Earth radius in km
-      final dLat = _degToRad(loc.latitude - userLocation.latitude);
-      final dLon = _degToRad(loc.longitude - userLocation.longitude);
-      final lat1 = _degToRad(userLocation.latitude);
-      final lat2 = _degToRad(loc.latitude);
-      final a =
-          _haversine(dLat) + math.cos(lat1) * math.cos(lat2) * _haversine(dLon);
-      return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    }
-
     final sorted = List<Professional>.from(pros);
-    sorted.sort((a, b) => distanceKm(a).compareTo(distanceKm(b)));
+    sorted.sort((a, b) {
+      final da = distanceKmTo(a) ?? double.infinity;
+      final db = distanceKmTo(b) ?? double.infinity;
+      return da.compareTo(db);
+    });
     return sorted;
+  }
+
+  /// Distance Haversine entre deux GeoPoints (km).
+  static double _haversineKm(GeoPoint a, GeoPoint b) {
+    const r = 6371.0; // Earth radius in km
+    final dLat = _degToRad(b.latitude - a.latitude);
+    final dLon = _degToRad(b.longitude - a.longitude);
+    final lat1 = _degToRad(a.latitude);
+    final lat2 = _degToRad(b.latitude);
+    final h =
+        _haversine(dLat) + math.cos(lat1) * math.cos(lat2) * _haversine(dLon);
+    return r * 2 * math.atan2(math.sqrt(h), math.sqrt(1 - h));
   }
 
   static double _degToRad(double deg) => deg * math.pi / 180.0;

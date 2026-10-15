@@ -9,6 +9,7 @@ import 'package:fixnow/core/utils/validators.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:fixnow/core/constants/app_constants.dart';
 import 'package:fixnow/features/booking/booking_controller.dart';
+import 'package:fixnow/features/home/home_controller.dart';
 import 'package:intl/intl.dart';
 
 /// Booking / service request screen.
@@ -47,6 +48,17 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // Pré-remplit l'adresse avec la première adresse enregistrée du client.
+    final addresses =
+        ref.read(userProfileProvider).valueOrNull?.addresses ?? const [];
+    if (addresses.isNotEmpty && _addressController.text.isEmpty) {
+      _addressController.text = addresses.first.fullAddress;
+    }
+  }
+
+  @override
   void dispose() {
     _descriptionController.dispose();
     _addressController.dispose();
@@ -67,6 +79,54 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
       setState(() {
         _selectedDate = picked;
       });
+    }
+  }
+
+  /// Remplit le champ adresse avec une adresse enregistrée
+  /// (message d'aide si le client n'en a aucune).
+  Future<void> _fillFromSavedAddress() async {
+    final addresses =
+        ref.read(userProfileProvider).valueOrNull?.addresses ?? const [];
+    if (addresses.isEmpty) {
+      AppAlerts.info(
+        context,
+        'Aucune adresse enregistrée. Ajoutez-en depuis « Mon profil → Mes adresses ».',
+      );
+      return;
+    }
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(AppSpacing.lg),
+              child: Text('Choisir une adresse', style: AppTextStyles.h4),
+            ),
+            ...addresses.map(
+              (a) => ListTile(
+                leading: const Icon(Icons.location_on_outlined,
+                    color: AppColors.primary),
+                title: Text(a.label.isEmpty ? 'Adresse' : a.label,
+                    style: AppTextStyles.bodyMedium),
+                subtitle: Text(
+                  a.fullAddress,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () => Navigator.of(sheetContext).pop(a.fullAddress),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() => _addressController.text = picked);
     }
   }
 
@@ -213,9 +273,26 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
               TextFormField(
                 controller: _addressController,
                 validator: (v) => Validators.required(v, 'L\'adresse'),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Adresse complète',
-                  prefixIcon: Icon(Icons.location_on_outlined),
+                  prefixIcon: const Icon(Icons.location_on_outlined),
+                  suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _addressController,
+                    builder: (context, value, _) => value.text.isEmpty
+                        ? IconButton(
+                            tooltip: 'Choisir une adresse enregistrée',
+                            icon: const Icon(Icons.bookmark_border_rounded),
+                            onPressed: _fillFromSavedAddress,
+                          )
+                        : IconButton(
+                            tooltip: 'Effacer',
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () {
+                              _addressController.clear();
+                              setState(() {});
+                            },
+                          ),
+                  ),
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),

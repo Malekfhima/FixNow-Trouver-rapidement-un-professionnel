@@ -96,9 +96,17 @@ Le fichier `.env` doit contenir les deux clés au format `KEY=value` (les
 valeurs ci-dessous sont des exemples) :
 
 ```dotenv
+# Cloudinary (upload d'images)
 CLOUDINARY_CLOUD_NAME=votre-cloud
 CLOUDINARY_UPLOAD_PRESET=votre-preset
+
+# Firebase (client) — apiKey, appId, senderId… lus par lib/firebase_options.dart
+FIREBASE_WEB_API_KEY=
+FIREBASE_WEB_APP_ID=
 ```
+
+La liste complète des variables Firebase est dans [``.env.example``](.env.example) :
+aucune clé n'est en dur dans le dépôt, et ``.env`` reste ignoré par Git.
 
 Après avoir modifié `.env`, arrêtez puis relancez l'application avec cette
 commande : les `--dart-define` sont intégrés à la compilation et ne sont pas

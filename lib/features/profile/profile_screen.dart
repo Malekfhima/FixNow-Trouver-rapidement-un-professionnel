@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:fixnow/core/theme/app_theme.dart';
-import 'package:fixnow/core/widgets/app_alerts.dart';
 import 'package:fixnow/core/widgets/app_avatar.dart';
 import 'package:fixnow/features/auth/auth_controller.dart';
 import 'package:fixnow/features/home/home_controller.dart';
@@ -96,10 +95,7 @@ class ProfileScreen extends ConsumerWidget {
             _MenuItem(
               icon: Icons.location_on_outlined,
               label: 'Mes adresses',
-              onTap: () => AppAlerts.info(
-                context,
-                'La gestion des adresses enregistrées arrive bientôt.',
-              ),
+              onTap: () => context.push('/profile/addresses'),
             ),
             _MenuItem(
               icon: Icons.notifications_outlined,

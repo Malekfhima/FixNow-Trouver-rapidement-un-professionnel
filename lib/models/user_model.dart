@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fixnow/models/address_model.dart';
 
 enum UserRole { client, pro, admin }
 
@@ -18,6 +19,10 @@ class AppUser {
   final String? phone;
   final String? avatarUrl;
   final String? fcmToken;
+
+  /// Saved addresses for bookings (maison, bureau…). Private: only the
+  /// owner (or an admin) can read this document.
+  final List<Address> addresses;
   final DateTime createdAt;
 
   const AppUser({
@@ -29,6 +34,7 @@ class AppUser {
     this.phone,
     this.avatarUrl,
     this.fcmToken,
+    this.addresses = const [],
     required this.createdAt,
   });
 
@@ -48,6 +54,10 @@ class AppUser {
       phone: data['phone'],
       avatarUrl: data['avatarUrl'],
       fcmToken: data['fcmToken'],
+      addresses: (data['addresses'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(Address.fromMap)
+          .toList(),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
@@ -93,6 +103,7 @@ class AppUser {
     String? phone,
     String? avatarUrl,
     String? fcmToken,
+    List<Address>? addresses,
     UserRole? role,
     bool? isPro,
   }) {
@@ -105,6 +116,7 @@ class AppUser {
       phone: phone ?? this.phone,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       fcmToken: fcmToken ?? this.fcmToken,
+      addresses: addresses ?? this.addresses,
       createdAt: createdAt,
     );
   }

@@ -22,6 +22,7 @@ import 'package:fixnow/features/client_dashboard/orders_screen.dart';
 import 'package:fixnow/features/client_dashboard/order_detail_screen.dart';
 import 'package:fixnow/features/profile/profile_screen.dart';
 import 'package:fixnow/features/profile/profile_edit_screen.dart';
+import 'package:fixnow/features/profile/addresses_screen.dart';
 import 'package:fixnow/features/review/review_screen.dart';
 import 'package:fixnow/features/notifications/notifications_screen.dart';
 import 'package:fixnow/features/admin/admin_screen.dart';
@@ -52,6 +53,7 @@ class RoutePaths {
   static const bookingNew = '/booking/new';
   static const notifications = '/notifications';
   static const profileEdit = '/profile/edit';
+  static const addresses = '/profile/addresses';
   static const review = '/review/:requestId';
   static const admin = '/admin';
 }
@@ -227,6 +229,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.profileEdit,
         builder: (context, state) => const ProfileEditScreen(),
+      ),
+
+      // Saved client addresses (Mes adresses)
+      GoRoute(
+        path: RoutePaths.addresses,
+        builder: (context, state) => const AddressesScreen(),
       ),
 
       // Review (rate a completed request)
